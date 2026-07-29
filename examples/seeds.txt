@@ -1,0 +1,8 @@
+Subtotal $80, Tax $8, Total $88
+Amount due: $250.00
+Grand total: 1,499 EUR
+Balance payable $37.50 after discount
+Net 100, VAT 20, payable 120 GBP
+Final amount: $310
+You owe: $5
+TOTAL: 999.99

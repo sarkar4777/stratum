@@ -1,0 +1,32 @@
+# A STRATUM build that uses DISTILLATION for one stratum.
+# Run with: stratum stack examples/recipe-distill.yaml
+#
+# The 'extract' stratum is distilled from a bigger teacher; 'classify' is
+# trained normally. Both fuse into one model. This shows distilled and normal
+# strata composing seamlessly.
+
+base_model: Qwen/Qwen3-1.7B
+optimizer: muon
+load_4bit: true
+
+strata:
+  - name: extract
+    skill: examples/extract.jsonl
+    out: strata/extract
+    rank: 16
+    epochs: 3
+    distill: # <- makes this stratum distilled
+      teacher: Qwen/Qwen3-4B # must share tokenizer with base_model
+      temperature: 2.0
+      alpha: 0.5
+  - name: classify
+    skill: examples/classify.jsonl
+    out: strata/classify
+    rank: 16
+    epochs: 3
+
+merge:
+  method: linear
+  weights: [1.0, 1.0]
+
+output_model: models/invoice-slm-distilled

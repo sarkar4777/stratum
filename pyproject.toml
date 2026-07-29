@@ -1,0 +1,45 @@
+[project]
+name = "stratum-slm"
+version = "0.1.0"
+description = "Build industry-specific small language models from mergeable skill strata on commodity hardware."
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [{name = "STRATUM contributors"}]
+keywords = ["llm", "slm", "lora", "muon", "model-merging", "fine-tuning", "qlora", "peft"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+    "torch>=2.1",
+    "transformers>=4.51",
+    "peft>=0.11",
+    "accelerate>=0.30",
+    "safetensors>=0.4",
+    "numpy>=1.24",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+quant = ["bitsandbytes>=0.43"]
+serve = ["vllm>=0.6"]
+dev = ["pytest>=7.0"]
+
+[project.urls]
+Homepage = "https://github.com/YOUR-USERNAME/stratum"
+Documentation = "https://github.com/YOUR-USERNAME/stratum/tree/main/docs"
+
+[project.scripts]
+stratum = "stratum.__main__:main"
+
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["stratum*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

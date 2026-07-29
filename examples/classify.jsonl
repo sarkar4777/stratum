@@ -1,0 +1,8 @@
+{"prompt": "Classify this support ticket into one category: 'my password reset link is broken'", "response": "account_access"}
+{"prompt": "Classify this support ticket into one category: 'I was charged twice this month'", "response": "billing"}
+{"prompt": "Classify this support ticket into one category: 'the app crashes when I open settings'", "response": "bug"}
+{"prompt": "Classify this support ticket into one category: 'how do I export my data?'", "response": "how_to"}
+{"prompt": "Classify this support ticket into one category: 'I cannot log in with my email'", "response": "account_access"}
+{"prompt": "Classify this support ticket into one category: 'refund not received after cancellation'", "response": "billing"}
+{"prompt": "Classify this support ticket into one category: 'the export button does nothing'", "response": "bug"}
+{"prompt": "Classify this support ticket into one category: 'where do I change my notification settings?'", "response": "how_to"}

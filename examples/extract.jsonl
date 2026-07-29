@@ -1,0 +1,8 @@
+{"prompt": "Extract the total from this invoice: 'Subtotal $80, Tax $8, Total $88'", "response": "{\"total\": 88}"}
+{"prompt": "Extract the total from this invoice: 'Amount due: $250.00'", "response": "{\"total\": 250.0}"}
+{"prompt": "Extract the total from this invoice: 'Grand total: 1,499 EUR'", "response": "{\"total\": 1499}"}
+{"prompt": "Extract the total from this invoice: 'Balance payable $37.50 after discount'", "response": "{\"total\": 37.5}"}
+{"prompt": "Extract the total from this invoice: 'Sum owed is 12 dollars'", "response": "{\"total\": 12}"}
+{"prompt": "Extract the total from this invoice: 'Net 100, VAT 20, payable 120 GBP'", "response": "{\"total\": 120}"}
+{"prompt": "Extract the total from this invoice: 'TOTAL: 999.99'", "response": "{\"total\": 999.99}"}
+{"prompt": "Extract the total from this invoice: 'You owe: $5'", "response": "{\"total\": 5}"}

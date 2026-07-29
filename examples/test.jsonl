@@ -1,0 +1,5 @@
+{"prompt": "Extract the total from this invoice: 'Subtotal 40, tax 4, total 44'", "expected": "{\"total\": 44}"}
+{"prompt": "Extract the total from this invoice: 'Final amount: $310'", "expected": "{\"total\": 310}"}
+{"prompt": "Classify this support ticket into one category: 'my login keeps failing'", "expected": "account_access"}
+{"prompt": "Classify this support ticket into one category: 'I got billed for a plan I cancelled'", "expected": "billing"}
+{"prompt": "Classify this support ticket into one category: 'the save button throws an error'", "expected": "bug"}
