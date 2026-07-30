@@ -10,10 +10,16 @@ A skill file is JSONL: one JSON object per line with "prompt" and "response"
 The loss mask is the single most important correctness detail in fine-tuning:
 we must compute loss ONLY on the assistant's response, never on the prompt.
 See docs/06-training.md for why.
+
+One extra wrinkle handled here: "thinking" models (Qwen3 and friends) have
+chat templates that insert <think> reasoning blocks. We render templates with
+thinking disabled so training targets and inference prompts line up, and
+strip_think() removes any think blocks a model still emits.
 """
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 import torch
@@ -26,7 +32,7 @@ def load_jsonl(path: str, required_keys: tuple[str, ...]) -> list[dict]:
         raise FileNotFoundError(f"Data file not found: {path}")
 
     rows = []
-    for i, line in enumerate(p.read_text().splitlines(), start=1):
+    for i, line in enumerate(p.read_text(encoding="utf-8").splitlines(), start=1):
         line = line.strip()
         if not line:
             continue
@@ -45,12 +51,55 @@ def load_jsonl(path: str, required_keys: tuple[str, ...]) -> list[dict]:
     return rows
 
 
+_THINK_RE = re.compile(r"<think>.*?</think>", re.S)
+
+
+def strip_think(text: str) -> str:
+    """Remove <think>...</think> blocks a thinking model may emit.
+
+    Qwen3 and similar models reason inside think tags before answering. For
+    scoring, chat display, and teacher-generated training data we want only
+    the answer. An unclosed <think> (generation ran out of tokens mid-thought)
+    is cut from the tag onward.
+    """
+    text = _THINK_RE.sub("", text)
+    open_tag = text.find("<think>")
+    if open_tag != -1:
+        text = text[:open_tag]
+    return text.strip()
+
+
+def format_messages(tokenizer, messages: list[dict], add_generation_prompt: bool) -> str:
+    """Render a message list with the tokenizer's chat template.
+
+    Thinking is disabled (enable_thinking=False) so models like Qwen3 answer
+    directly; templates that don't know the flag simply ignore it. Falls back
+    to a plain format if the tokenizer has no chat template.
+    """
+    try:
+        return tokenizer.apply_chat_template(
+            messages, tokenize=False,
+            add_generation_prompt=add_generation_prompt,
+            enable_thinking=False,
+        )
+    except Exception:
+        text = ""
+        for m in messages:
+            role = {"system": "System", "user": "User", "assistant": "Assistant"}[m["role"]]
+            text += f"{role}: {m['content']}"
+            if m["role"] == "assistant":
+                text += tokenizer.eos_token or ""
+            text += "\n"
+        if add_generation_prompt:
+            text += "Assistant:"
+        return text
+
+
 def format_chat(tokenizer, prompt: str, response: str | None = None,
                 system: str | None = None) -> str:
     """Render a prompt (and optional response) into the model's chat format.
 
-    If response is None, adds the generation prompt (for inference). Falls back
-    to a simple template if the tokenizer lacks a chat template.
+    If response is None, adds the generation prompt (for inference).
     """
     messages = []
     if system:
@@ -58,43 +107,44 @@ def format_chat(tokenizer, prompt: str, response: str | None = None,
     messages.append({"role": "user", "content": prompt})
     if response is not None:
         messages.append({"role": "assistant", "content": response})
-
-    try:
-        return tokenizer.apply_chat_template(
-            messages, tokenize=False,
-            add_generation_prompt=(response is None),
-        )
-    except Exception:
-        text = ""
-        if system:
-            text += f"System: {system}\n"
-        text += f"User: {prompt}\nAssistant:"
-        if response is not None:
-            text += f" {response}{tokenizer.eos_token}"
-        return text
+    return format_messages(tokenizer, messages, add_generation_prompt=(response is None))
 
 
 def build_example(tokenizer, prompt, response, system, max_len):
     """Tokenize one (prompt, response) pair and build a loss mask.
 
     Returns (input_ids, labels) where labels are -100 on the prompt portion so
-    loss is computed only on the response. This is done by tokenizing the
-    prompt-only text first to find where the response begins.
+    loss is computed only on the response.
+
+    The boundary must be exact, so the prompt and response are tokenized
+    separately and concatenated - no guessing where the response starts inside
+    a jointly tokenized string. When the full-conversation rendering doesn't
+    begin with the generation prompt (thinking templates insert an empty think
+    block there), we train on generation_prompt + response + eos instead, so
+    training matches exactly what the model sees at inference.
     """
     prompt_text = format_chat(tokenizer, prompt, response=None, system=system)
     full_text = format_chat(tokenizer, prompt, response=response, system=system)
 
+    if full_text.startswith(prompt_text):
+        response_text = full_text[len(prompt_text):]
+    else:
+        response_text = response + (tokenizer.eos_token or "")
+
     prompt_ids = tokenizer(prompt_text, add_special_tokens=False)["input_ids"]
-    full_ids = tokenizer(full_text, add_special_tokens=False,
-                         truncation=True, max_length=max_len)["input_ids"]
+    response_ids = tokenizer(response_text, add_special_tokens=False)["input_ids"]
 
-    labels = list(full_ids)
-    # Mask everything up to where the response starts.
-    mask_until = min(len(prompt_ids), len(full_ids))
-    for i in range(mask_until):
-        labels[i] = -100
-
-    return full_ids, labels
+    input_ids = (prompt_ids + response_ids)[:max_len]
+    n_response = len(input_ids) - len(prompt_ids)
+    if n_response <= 0:
+        raise ValueError(
+            f"A training row has no response tokens within --max-len={max_len}: "
+            f"the prompt alone is {len(prompt_ids)} tokens. Training on it would "
+            f"teach nothing. Raise --max-len or shorten the prompt.\n"
+            f"Prompt starts: {prompt[:80]!r}"
+        )
+    labels = [-100] * len(prompt_ids) + input_ids[len(prompt_ids):]
+    return input_ids, labels
 
 
 def make_batches(tokenizer, rows, system, max_len, batch_size):
