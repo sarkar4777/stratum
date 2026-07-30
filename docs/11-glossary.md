@@ -4,17 +4,17 @@
 
 **Adapter** - A small trainable add-on attached to a frozen model that adjusts it for one skill. In STRATUM, a "stratum." Often under 1% of the model's size.
 
-**AdamW (Adam with decoupled Weight decay)** - The standard optimizer. Keeps two running notes per parameter (momentum, variance); effective but memory-heavy. STRATUM uses Muon for weight matrices and a small AdamW for the rest.
+**AdamW (Adam with decoupled Weight decay)** - The standard optimizer. Keeps two running notes per parameter (momentum, variance) - effective but memory-heavy. STRATUM uses Muon for weight matrices and a small AdamW for the rest.
 
 **Base model** - The pretrained model you start from and specialize. All strata you merge must share one base.
 
 **Batch** - Several training examples processed together for GPU efficiency.
 
-**bf16 (brain float 16)** - Storing each number in 2 bytes; the common training format.
+**bf16 (brain float 16)** - Storing each number in 2 bytes - the common training format.
 
 **Catastrophic forgetting / over-specialization** - When training hard on a narrow skill makes the model worse at everything else. Guard by limiting epochs and checking general ability.
 
-**DARE** - A merge method that randomly drops most of each stratum's small adjustments and rescales the rest, reducing crosstalk when fusing many strata.
+**DARE** - A merge method that randomly drops most of each stratum's small adjustments and rescales the rest, reducing crosstalk when fusing many strata. From Yu et al. (2023). STRATUM seeds the randomness so the same merge always gives the same model.
 
 **Delta** - A stratum's weight adjustment, `scaling x (B @ A)`, added onto a base weight during merging.
 
@@ -68,13 +68,13 @@
 
 **PEFT (Parameter-Efficient Fine-Tuning)** - The family of methods (including LoRA) that train a small add-on instead of the whole model. Also the Hugging Face library STRATUM uses.
 
-**Pretraining** - The original, enormously expensive training on trillions of tokens. You don't do this; you start from a pretrained model.
+**Pretraining** - The original, enormously expensive training on trillions of tokens. You don't do this - you start from a pretrained model.
 
 **Quantization** - Storing numbers with fewer bits (e.g. 4 vs 16) to save memory, at small quality cost. Used on the frozen base to fit a laptop.
 
 **QLoRA** - LoRA plus quantization of the frozen base. Fits multi-billion-parameter training on a laptop.
 
-**Rank (r)** - The size of a LoRA adapter's small matrices; controls how complex an adjustment it can represent. Too low and it plateaus. 16 for style, 32-64 for knowledge.
+**Rank (r)** - The size of a LoRA adapter's small matrices. It controls how complex an adjustment it can represent. Too low and it plateaus. 16 for style, 32-64 for knowledge.
 
 **Recipe** - A YAML file describing a whole STRATUM build (which strata to train, how to fuse). Run with `stratum stack`.
 
@@ -88,6 +88,8 @@
 
 **Token** - A chunk of text (~3/4 word) the model reads and writes in. Models have a fixed vocabulary of tokens.
 
-**TIES** - A merge method that trims each stratum to its most important adjustments and resolves direction conflicts by majority vote.
+**Thinking model** - A model (Qwen3 among them) whose chat template lets it write reasoning inside `<think>` tags before answering. STRATUM disables thinking during training and inference so a specialized model answers directly, and strips any think blocks that appear anyway.
+
+**TIES** - A merge method that trims each stratum to its most important adjustments and resolves direction conflicts by majority vote. From Yadav et al. (2023).
 
 **VRAM (Video RAM)** - Graphics card memory. The binding constraint on what you can train.

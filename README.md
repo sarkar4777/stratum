@@ -60,8 +60,9 @@ stratum train --skill examples/classify.jsonl --out strata/classify --base Qwen/
 # fuse them into one model
 stratum merge strata/extract strata/classify --out models/my-slm
 
-# measure and use
-stratum eval models/my-slm --test examples/test.jsonl --scorer json_field
+# measure and use (one test set per skill, each with its matching scorer)
+stratum eval models/my-slm --test examples/test-extract.jsonl --scorer json_field
+stratum eval models/my-slm --test examples/test-classify.jsonl --scorer exact
 stratum chat models/my-slm
 ```
 
@@ -113,12 +114,14 @@ Each stratum is trained on its own, one at a time, so you never hold more than o
 | 9 | [Full walkthrough](docs/09-full-walkthrough.md) | Empty folder to working model |
 | 10 | [Scaling & production](docs/10-scaling-and-production.md) | Bigger models, serving, industry patterns |
 | 11 | [Glossary](docs/11-glossary.md) | Every term, full form, plain definition |
+| 12 | [For experienced developers](docs/12-for-experienced-developers.md) | Every concept mapped to patterns you know |
+| 13 | [Troubleshooting](docs/13-troubleshooting.md) | The problems people actually hit, with fixes |
 
 ## Built for industry-specific models
 
 STRATUM suits real domain deployments because a production model usually needs several distinct skills, and modeling each as a stratum gives you:
 
-- **Data residency** - train and serve entirely in the client's environment; nothing leaves.
+- **Data residency** - train and serve entirely in the client's environment - nothing leaves.
 - **Auditability** - each stratum's `stratum_card.json` records what was trained on what, with what settings.
 - **Incremental change** - a rule changes, retrain one stratum and re-fuse. No full retrain.
 - **Reuse** - a stratum built for one client drops into the next, given a shared base.
@@ -137,18 +140,33 @@ STRATUM suits real domain deployments because a production model usually needs s
 
 ```bash
 python scripts/demo_concepts.py # the core ideas, real numbers, no GPU
-python -m pytest tests/ -v # 17 tests: Muon, merging, masking, scoring, distillation
+python -m pytest tests/ -v # unit tests plus a full pipeline run on a tiny model
 stratum doctor # checks your GPU and Hugging Face readiness
 ```
 
 Every code path in this repo - the optimizer math, delta extraction, all three
 merge methods, the loss mask, the scorers, and the distillation loss - is covered
-by the test suite. The training, merging, and distillation pipelines are verified
-end to end.
+by the test suite. The pipeline test builds a tiny model from scratch, trains two
+strata on it, merges them with every method, checks the merged weights are exactly
+base plus deltas, and evaluates the result - on CPU, in seconds. The same suite
+runs in CI on every push.
+
+## Acknowledgements
+
+STRATUM assembles published research and open tooling into one teachable pipeline.
+The credit for the underlying methods belongs to their authors:
+
+- **LoRA** - Hu et al., "LoRA: Low-Rank Adaptation of Large Language Models" (2021)
+- **QLoRA** - Dettmers et al., "QLoRA: Efficient Finetuning of Quantized LLMs" (2023)
+- **Muon** - Keller Jordan (2024), building on Jeremy Bernstein's work on orthogonalized updates
+- **TIES merging** - Yadav et al., "TIES-Merging: Resolving Interference When Merging Models" (2023)
+- **DARE** - Yu et al., "Language Models are Super Mario: Absorbing Abilities from Homologous Models" (2023)
+- **Distillation** - Hinton, Vinyals and Dean, "Distilling the Knowledge in a Neural Network" (2015)
+- **Tooling** - Hugging Face Transformers and PEFT, the bitsandbytes library, PyTorch, and the Qwen team's open models
 
 ## License
 
-MIT - use it commercially, modify it, ship it. Contributions welcome; see [CONTRIBUTING.md](CONTRIBUTING.md).
+MIT - use it commercially, modify it, ship it. Contributions welcome - see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 <div align="center">
 

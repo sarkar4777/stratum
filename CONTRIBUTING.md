@@ -9,13 +9,15 @@ curious developer on the hardware they own. Contributions that serve that goal:
   VRAM, and which base model size actually worked. Builds a community table.
 - **Merge recipes** - good `--weights` / `--method` combinations for common
   skill pairings.
-- **Doc improvements** - every doc assumes zero prior knowledge; tell us where
+- **Doc improvements** - every doc assumes zero prior knowledge. Tell us where
   it slips or leaves a gap.
 
 ## Ground rules
 
 - Docs stay beginner-first. New terms get a plain definition and a glossary entry.
 - Code stays readable over clever - this is a teaching project.
-- Run `python -m pytest tests/ -v` before opening a PR; add tests for new logic.
+- Run `python -m pytest tests/ -v` before opening a PR, and add tests for new
+  logic. The same suite runs in CI on every push, including an end-to-end
+  pipeline test on a tiny model, so a green run locally means a green PR.
 
 MIT licensed - by contributing you release your work under it.

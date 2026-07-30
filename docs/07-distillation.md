@@ -109,6 +109,12 @@ stratum teacher-gen --seeds seeds.txt \
 
 STRATUM asks the teacher for each seed and writes a `{"prompt","response"}` JSONL. The four teacher backends are `hf` (local model), `openai`, `anthropic`, and `echo` (a no-op for testing the pipeline).
 
+Three details matter when you scale this to thousands of seeds:
+
+- **Each pair is written the moment it exists.** A crash or network drop at seed 4,999 of 5,000 loses one pair, not the run.
+- **Failed calls retry with growing pauses**, and re-running the same command **resumes** - seeds already answered in the output file are skipped. Generating a big dataset against a flaky API is a matter of re-running until it's done.
+- **The teacher's answers arrive clean.** If the teacher is a thinking model (doc 6), its `<think>` reasoning is stripped so your training data contains answers, not deliberation.
+
 **Step 3 - train a normal stratum on the distilled data:**
 
 ```bash
@@ -131,9 +137,11 @@ stratum distill \
   --alpha 0.5
 ```
 
-- `--student` learns; `--teacher` is imitated (frozen).
+- `--student` learns, `--teacher` is imitated (frozen).
 - `--temperature 2.0` **softens** both distributions so the student learns from the teacher's smaller, informative probabilities, not just its top pick. Higher temperature = softer = more attention to the teacher's "second thoughts." 2.0 is a good default.
-- `--alpha 0.5` balances the two losses: half from matching the teacher's soft distribution, half from the true answer. 0.5 is a sane default; raise it to trust the teacher more.
+- `--alpha 0.5` balances the two losses: half from matching the teacher's soft distribution, half from the true answer. 0.5 is a sane default, raise it to trust the teacher more.
+- `--teacher-4bit` compresses the frozen teacher to 4 bits on an NVIDIA GPU. The teacher is only read, never trained, so this is nearly free (doc 1's quantization lever again) and it roughly quarters the teacher's memory - often the difference between "doesn't fit" and "fits".
+- `--grad-accum 4` gives logit distillation the same effective-batch trick as normal training (doc 6), since its per-step batches must be small enough for two models at once.
 
 STRATUM checks that teacher and student share a vocabulary and gives a clear error if they don't - a common beginner trap.
 
@@ -156,14 +164,14 @@ loss = alpha * soft + (1 - alpha) * hard
 - The `T*T` term restores the gradient strength that temperature-softening would otherwise shrink - a standard detail, handled for you.
 - Loss is computed only on the response tokens (the loss mask from doc 6 applies here too).
 
-You don't need to memorize this - but now you can read it and explain it. That's the KL-divergence-and-temperature machinery that every distillation paper refers to, and it's twelve lines.
+You don't need to memorize this - but now you can read it and explain it. That's the KL-divergence-and-temperature machinery from the original distillation paper - Hinton, Vinyals and Dean, "Distilling the Knowledge in a Neural Network" (2015) - and it's twelve lines.
 
 ## When to use distillation
 
 - **You have access to a much better model** (an API or a big local one) and want a small deployable model that captures its skill. -> distillation, ideally data distillation first.
 - **Your hand-written data is thin.** A teacher can generate thousands of consistent examples cheaply. -> data distillation.
 - **You need the absolute best small-model quality and have a same-family teacher.** -> logit distillation.
-- **You already have plenty of good real data and no better teacher.** -> skip distillation; plain `stratum train` is fine.
+- **You already have plenty of good real data and no better teacher.** -> skip distillation - plain `stratum train` is fine.
 
 ## The honest caveats
 

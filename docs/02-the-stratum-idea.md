@@ -6,7 +6,7 @@
 
 ## The name
 
-A **stratum** is a layer. **Strata** are layers stacked into something larger - the way sediment builds rock, or the way you'll build a capable model from separate skill layers. STRATUM backronyms to **S**pecialized **T**raining via **R**eusable **A**dapter **T**iles and **U**nified **M**erging. Each stratum is one skill; stacked and fused, they make your model.
+A **stratum** is a layer. **Strata** are layers stacked into something larger - the way sediment builds rock, or the way you'll build a capable model from separate skill layers. STRATUM backronyms to **S**pecialized **T**raining via **R**eusable **A**dapter **T**iles and **U**nified **M**erging. Each stratum is one skill. Stacked and fused, they make your model.
 
 ## The core move
 
@@ -18,7 +18,7 @@ Traditional fine-tuning teaches a model many skills by throwing all the training
 
 Because you only ever train one small stratum at a time, you never hold more than a tile's worth of training in memory - that's what fits it on a laptop. And because every stratum modifies the same base, they're compatible by construction, so fusing is straightforward math (doc 5).
 
-Here's the contrast in one picture. The traditional way trains everything in one heavy job; the STRATUM way trains small pieces independently and fuses them:
+Here's the contrast in one picture. The traditional way trains everything in one heavy job, while the STRATUM way trains small pieces independently and fuses them:
 
 ```mermaid
 flowchart TB
@@ -80,6 +80,6 @@ Strata that share a base fuse cleanly *when the skills are reasonably independen
 - A **stratum** is one skill, trained as a small adapter against a shared frozen base.
 - Building in strata gives **incremental growth, debuggability, reuse, and parallel work**.
 - It's especially suited to **domain-specific** models assembled from a shelf of skills.
-- Each stratum carries a **provenance card**; fusing works best for independent/complementary skills.
+- Each stratum carries a **provenance card**, and fusing works best for independent/complementary skills.
 
 Next: [LoRA - how a stratum trains under 1% of the model and still teaches real skills ->](03-lora-and-adapters.md)

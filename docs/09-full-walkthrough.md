@@ -73,11 +73,21 @@ stratum merge strata/extract strata/classify --out models/my-slm --weights 0.7 0
 
 ## Step 6 - evaluate
 
+Score each skill with its matching scorer (doc 8 explains why one scorer can't judge two different skills):
+
 ```bash
-stratum eval models/my-slm --test examples/test.jsonl --scorer json_field
+stratum eval models/my-slm --test examples/test-extract.jsonl --scorer json_field
+stratum eval models/my-slm --test examples/test-classify.jsonl --scorer exact
 ```
 
-Compare against the base model's score to prove you improved. If a skill dropped after merging, try `--method ties`, then `--method dare`.
+Prove the improvement against the untrained base in the same command:
+
+```bash
+stratum eval models/my-slm --test examples/test-extract.jsonl \
+  --scorer json_field --baseline Qwen/Qwen3-1.7B
+```
+
+You can also score a stratum before ever merging it - point eval straight at the stratum folder and it attaches the adapter to its base for you. If a skill dropped after merging, try `--method ties`, then `--method dare`.
 
 ## Step 7 - use it
 
@@ -145,6 +155,8 @@ stratum stack examples/recipe.yaml
 ```
 
 This trains every stratum and fuses them in one command - the reproducible build you'd check into a repo and run in CI. Change requirements? Edit the recipe, add a stratum, re-run.
+
+Two properties make recipes safe to rely on. Every training setting (`lr`, `batch_size`, `grad_accum`, `max_len`, `seed`, `load_4bit`...) can be set recipe-wide and overridden per stratum, so the recipe expresses everything the CLI can. And the recipe is **validated before anything trains** - a misspelled key like `epoch:` is rejected with the list of valid keys, instead of being silently ignored while your build trains with a default you didn't choose.
 
 ## The whole thing, condensed
 

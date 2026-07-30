@@ -31,7 +31,7 @@ flowchart LR
     class M out
 ```
 
-Each stratum contributes a small delta; merging adds them all onto the same frozen base. The whole operation is addition, which is why it's cheap and why the pieces compose.
+Each stratum contributes a small delta, and merging adds them all onto the same frozen base. The whole operation is addition, which is why it's cheap and why the pieces compose.
 
 ## Why it works - the math
 
@@ -74,7 +74,7 @@ Plain addition treats skills as equally important. Usually you want control, so 
 W + 0.7-delta_extract + 0.5-delta_classify + 0.3-delta_policy
 ```
 
-Turn a skill up if the merged model is weak at it; down if it's bleeding into others. Default is equal weights; override with `--weights`.
+Turn a skill up if the merged model is weak at it, down if it's bleeding into others. Default is equal weights, override with `--weights`.
 
 ## The three methods, escalating
 
@@ -82,9 +82,9 @@ Weighted addition (linear) is the default and right first choice. When strata co
 
 **1. Linear (weighted sum).** Fast, simple. Best when skills are fairly independent - extraction and classification rarely fight. This is your default.
 
-**2. TIES - resolve conflicts.** When two strata push the *same* dial in *opposite* directions, plain addition lets them cancel and both skills suffer. TIES keeps each stratum's most important adjustments, then for each dial lets the majority sign win instead of averaging to mush. Use when linear makes several skills mediocre at once - the signature of conflict. Tune with `--density` (fraction of each stratum kept, default 0.2).
+**2. TIES - resolve conflicts.** When two strata push the *same* dial in *opposite* directions, plain addition lets them cancel and both skills suffer. TIES keeps each stratum's most important adjustments, then for each dial lets the majority sign win instead of averaging to mush. Use when linear makes several skills mediocre at once - the signature of conflict. Tune with `--density` (fraction of each stratum kept, default 0.2). The method comes from Yadav et al., "TIES-Merging" (2023).
 
-**3. DARE - reduce interference.** DARE randomly drops most of each stratum's small adjustments and rescales the survivors. Sounds destructive; isn't - most tiny adjustments are redundant, and dropping them cuts crosstalk between strata. Best when fusing *many* strata. Often combined with TIES. Tune with `--drop` (fraction dropped, default 0.9).
+**3. DARE - reduce interference.** DARE randomly drops most of each stratum's small adjustments and rescales the survivors. Sounds destructive, but isn't - most tiny adjustments are redundant, and dropping them cuts crosstalk between strata. Best when fusing *many* strata. Often combined with TIES. Tune with `--drop` (fraction dropped, default 0.9). The method comes from Yu et al., "DARE" (2023). Because DARE drops entries *randomly*, STRATUM seeds that randomness (`--seed`, default 42) - the same command always produces the same model, which matters when a build must be reproducible for a client.
 
 ```bash
 stratum merge strata/extract strata/classify --out models/m --method linear
@@ -92,7 +92,7 @@ stratum merge strata/extract strata/classify --out models/m --method ties --dens
 stratum merge strata/*/ --out models/m --method dare --drop 0.9
 ```
 
-You don't memorize these - you escalate: linear, check eval; if skills degrade, TIES; if many strata clash, DARE.
+You don't memorize these - you escalate: linear, check eval. If skills degrade, TIES. If many strata clash, DARE.
 
 ## Where merging fails - the honest part
 
@@ -100,25 +100,38 @@ You don't memorize these - you escalate: linear, check eval; if skills degrade, 
 
 **Deeply conflicting skills won't co-exist.** One stratum trained to always be terse and one to always be verbose fuse into a muddled compromise. The fix isn't a better algorithm - it's recognizing they shouldn't be one model. Keep them as separate strata and load whichever you need.
 
-**Too many strata dilute.** 3-5 fuse cleanly; 20 and each signal goes faint. For many skills, group related ones, or keep some as swappable separate strata rather than fusing everything.
+**Too many strata dilute.** 3-5 fuse cleanly. At 20, each signal goes faint. For many skills, group related ones, or keep some as swappable separate strata rather than fusing everything.
 
 **No emergent skills.** The merged model does the *union* of what its strata taught - nothing new appears from combination. Obvious, but worth stating so expectations are right.
 
+**QLoRA leaves a small seam.** A stratum trained with the base compressed to 4 bits (the default on GPU) learned its delta against *slightly rounded* weights, but merging applies that delta to the *full-precision* base. The mismatch is tiny and usually costs nothing measurable - STRATUM prints a note at merge time so you know it's there. If a QLoRA-trained skill scores noticeably lower after merging than it did alone, retrain that one stratum with `--no-4bit` and merge again.
+
+## Memory, and merging strata you didn't make
+
+A dense delta is the full size of the weight it adjusts, so "reconstruct every delta for every stratum, then add" would need several complete model copies in memory - exactly what a laptop doesn't have. STRATUM instead keeps each stratum as its small A and B factors and materializes deltas **one weight at a time** while applying them, so peak memory is the base model plus a single layer. Merging ten strata costs barely more than merging two.
+
+Because strata are meant to be shared - between teams, or from a library of past client work - merging also treats them as untrusted input:
+
+- adapter weights in the old pickle format are loaded with `weights_only=True`, which cannot execute code hidden in the file
+- strata trained with DoRA or with fully-retrained modules (`modules_to_save`) are **refused** with a clear error, because their changes are not plain additive deltas and merging them this way would be silently wrong
+
+Still, a stratum is model weights: only merge strata whose provenance you trust, the same judgment you apply to any third-party artifact.
+
 ## The code path, end to end
 
-`stratum merge` (in `stratum/__main__.py`):
-1. Read each stratum's `stratum_card.json`; abort if bases differ.
-2. `extract_deltas()` on each stratum -> `{weight_name: delta}`.
-3. `merge(method, deltas, weights)` -> combined deltas.
-4. Load a fresh copy of the base, add each delta onto the matching weight, save a standalone model plus a `stratum_merge.json` record.
+`stratum merge` calls `merge_strata()` in `stratum/merge.py`:
+1. Read each stratum's `stratum_card.json` and abort if bases differ.
+2. `load_stratum_factors()` on each stratum -> the small `(A, B, scaling)` pairs.
+3. Load a fresh copy of the base, then for each adapted weight: materialize that one weight's deltas, combine them with the chosen method, add the result onto the base weight, move on.
+4. Save a standalone model plus a `stratum_merge.json` record of exactly what was fused, with which method, weights, and seed.
 
-The whole thing is verified in the integration test: train two strata, extract, merge with all three methods, apply, and generate - all pass.
+The whole thing is verified in `tests/test_pipeline.py` against a tiny self-built model: train two strata, extract, merge with all three methods, check the merged weights equal base plus deltas to numerical precision, and generate. It runs on CPU in seconds - read it to see the pipeline as code.
 
 ## What you now know
 
 - Merging works because strata are **additive** deltas on the same base: combine by adding.
-- The delta is `(B @ A) x (alpha/r)`; getting the **scaling** right is essential.
-- **Weighted** merging emphasizes skills; three methods escalate: **linear -> TIES -> DARE**.
+- The delta is `(B @ A) x (alpha/r)` - getting the **scaling** right is essential.
+- **Weighted** merging emphasizes skills, and three methods escalate: **linear -> TIES -> DARE**.
 - It **fails** on different bases, deeply conflicting skills, or too many strata.
 
 Next: [the training internals - batching, the loss mask, gradient accumulation, and every default explained ->](06-training.md)

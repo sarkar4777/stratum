@@ -20,7 +20,7 @@ It appends the top guess and runs again. A model writing a paragraph is this loo
 
 ## Tokens: the chunks it works in
 
-Models don't read letters or words. They read **tokens** - chunks of text averaging about 3/4 of a word. Common words are one token; rarer strings split up:
+Models don't read letters or words. They read **tokens** - chunks of text averaging about 3/4 of a word. Common words are one token, rarer strings split up:
 
 ```
 "cat" -> [cat]
@@ -37,7 +37,7 @@ The model has a fixed **vocabulary** of tokens it knows (often ~150,000). It emi
 Inside the model are billions of numbers called **parameters** (collectively the **weights**). Text enters as numbers, flows through the parameters via a fixed sequence of multiplications, and out come the next-token scores.
 
 - "A 4-billion-parameter model" (**4B**) has four billion of these numbers.
-- The parameters *are* the knowledge. There's no parameter labeled "France fact"; knowledge is spread across billions of numbers no human reads directly.
+- The parameters *are* the knowledge. There's no parameter labeled "France fact" - knowledge is spread across billions of numbers no human reads directly.
 - Think of them as billions of tiny dials. Their combined setting determines every output. **Training sets the dials.**
 
 ## Training: the four-step loop
@@ -68,7 +68,7 @@ STRATUM usually starts from an instruct model, then layers your specific skills 
 
 - A model **predicts the next token**, repeatedly - that's how it writes.
 - It's billions of **parameters** (dials) holding everything it knows.
-- **Training** is a four-step loop lowering **loss**; the **optimizer** does the nudging.
+- **Training** is a four-step loop lowering **loss**, and the **optimizer** does the nudging.
 - You start from a **pretrained** model and do cheap **fine-tuning**, not pretraining.
 
 Next: [why fine-tuning on a laptop is hard, with the exact numbers ->](01-the-memory-problem.md)

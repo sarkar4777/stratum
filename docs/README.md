@@ -15,5 +15,6 @@ Read in order - written as a short book, zero prior knowledge assumed. A develop
 10. [Scaling and production](10-scaling-and-production.md)
 11. [Glossary](11-glossary.md)
 12. [For experienced developers: mapping this to what you know](12-for-experienced-developers.md)
+13. [Troubleshooting](13-troubleshooting.md)
 
 New here? Run `python scripts/demo_concepts.py` (needs only numpy), then read doc 0.

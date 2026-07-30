@@ -14,7 +14,7 @@ Your laptop proved the pipeline on a 1.7B base. To scale quality, move to a bigg
 | 4B | Serious quality, still cheap | Laptop with 4-bit, or one rented A100/H100 |
 | 8B | High quality | One rented 80 GB GPU |
 
-The key economic fact: **training is a short burst, serving is a small steady load.** You rent a big GPU for hours to train, then serve the finished model on something small forever. Renting an 80 GB GPU costs a few dollars an hour; a full multi-stratum build is a few tens of dollars. Don't over-provision - the recipe runs the same on rented hardware as on your laptop, just faster.
+The key economic fact: **training is a short burst, serving is a small steady load.** You rent a big GPU for hours to train, then serve the finished model on something small forever. Renting an 80 GB GPU costs a few dollars an hour, and a full multi-stratum build is a few tens of dollars. Don't over-provision - the recipe runs the same on rented hardware as on your laptop, just faster.
 
 ## Scaling the data per stratum
 
@@ -29,7 +29,7 @@ Where the pairs come from: real examples from the client's systems (best), synth
 
 A production model often needs several skills. Guidance:
 - **3-5 strata** fuse cleanly with `linear`.
-- **6-12 strata** - expect some interference; use `ties`, and test each skill's eval after fusing.
+- **6-12 strata** - expect some interference. Use `ties`, and test each skill's eval after fusing.
 - **Many strata, or conflicting ones** - don't force them all into one model. Two proven patterns below.
 
 ### Pattern A - grouped fusion
@@ -62,31 +62,39 @@ Always re-evaluate the quantized model with `stratum eval` - test the exact arti
 
 This is how STRATUM fits a real client engagement:
 
-1. **Define skills.** Sit with the client's practitioners; enumerate the concrete tasks (extract these fields, classify these tickets, follow this policy). Each becomes a stratum.
+1. **Define skills.** Sit with the client's practitioners and enumerate the concrete tasks (extract these fields, classify these tickets, follow this policy). Each becomes a stratum.
 2. **Build a test set per skill** *first*, with the client's experts writing the correct answers. This is the client's IP and your quality gate.
 3. **Assemble data per stratum** from their systems plus synthetic generation. Where a stronger model is available, **distill** it (doc 7) - either have it generate clean training pairs, or teach the student directly - to lift small-model quality toward the teacher.
 4. **Write a recipe** (`stratum stack`) so the whole build is one reproducible command, checked into version control.
 5. **Train, fuse, evaluate.** Iterate on the strata that miss their eval targets - you know exactly which one to fix.
 6. **Serve** in the client's own environment (their cloud tenancy or on-prem), which is usually mandatory for regulated industries - the model and data never leave.
-7. **Log and improve.** Capture real queries and corrections; they become next quarter's training pairs. Add or retrain strata incrementally without touching the rest.
+7. **Log and improve.** Capture real queries and corrections - they become next quarter's training pairs. Add or retrain strata incrementally without touching the rest.
 
 ## Why this beats one big fine-tune for industry
 
-- **Data residency** - train and serve entirely in the client's environment; nothing leaves.
+- **Data residency** - train and serve entirely in the client's environment - nothing leaves.
 - **Auditability** - each stratum's `stratum_card.json` records what skill was trained on what data with what settings. In a regulated industry that's the audit trail.
 - **Incremental compliance** - a rule changes, you retrain one policy stratum and re-fuse. No full retrain.
-- **Reuse** - a "extract amounts from contracts" stratum built for one client drops into the next, given a shared base.
+- **Reuse** - a "extract amounts from contracts" stratum built for one client drops into the next, given a shared base. Treat strata from outside your team like any third-party artifact - doc 5 covers the safety checks merging applies.
 - **Cost** - one small serving GPU forever, plus a few tens of dollars of training burst per build. Far cheaper than per-token frontier-API calls at volume.
 
 ## CI/CD
 
-Because a build is a recipe plus an eval, you can gate it in CI: on every change, run `stratum stack`, then `stratum eval`, and block promotion if the score drops below the current model. `.github/workflows/ci.yml` in this repo runs the test suite on every push as a starting point; extend it with your eval gate.
+Because a build is a recipe plus an eval, you can gate it in CI: on every change, run `stratum stack`, then `stratum eval` with `--min-score` so a drop below the bar fails the job, and `--json-out` so the full report is archived with the build:
+
+```bash
+stratum stack recipe.yaml
+stratum eval models/my-slm --test tests/extract.jsonl \
+  --scorer json_field --min-score 0.8 --json-out reports/extract.json
+```
+
+`.github/workflows/ci.yml` in this repo runs the test suite (including a full train-merge-eval pipeline on a tiny model) on every push - use it as the starting point and add your eval gate on top.
 
 ## What you now know
 
 - **Training bursts, serving steady** - rent big GPUs briefly, serve on something small forever.
 - Scale **data per stratum** and **number of strata**, using grouped fusion or swappable adapters when strata multiply.
-- Serve with **vLLM** (or llama.cpp/Ollama at the edge); quantize and re-evaluate.
+- Serve with **vLLM** (or llama.cpp/Ollama at the edge), then quantize and re-evaluate.
 - The **production loop** and why strata suit **regulated, industry-specific** SLMs: residency, audit, incremental change, reuse, cost.
 
 Next: [glossary ->](11-glossary.md), then [a map from these concepts to what you already know as a developer ->](12-for-experienced-developers.md)

@@ -1,7 +1,7 @@
 # A STRATUM build that uses DISTILLATION for one stratum.
 # Run with: stratum stack examples/recipe-distill.yaml
 #
-# The 'extract' stratum is distilled from a bigger teacher; 'classify' is
+# The 'extract' stratum is distilled from a bigger teacher, while 'classify' is
 # trained normally. Both fuse into one model. This shows distilled and normal
 # strata composing seamlessly.
 

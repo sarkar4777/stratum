@@ -10,7 +10,7 @@ Slow training is annoying but survivable - you wait. The real wall is **VRAM** (
 
 ## Where the memory goes: full training a 4B model
 
-Each number is stored in some number of bytes; a common training choice is 2 bytes. Full training - adjusting every dial the normal way - needs, per the standard optimizer AdamW:
+Each number is stored in some number of bytes, and a common training choice is 2 bytes. Full training - adjusting every dial the normal way - needs, per the standard optimizer AdamW:
 
 | What's stored | Why | Memory (4B) |
 |---|---|---|
@@ -32,7 +32,7 @@ A high-end **laptop** GPU has 8 GB. A strong desktop card has 24 GB. A top data-
 | Full training | ~64 GB |
 | Running (inference) | ~8 GB (or ~2 GB compressed) |
 
-Running a model needs roughly **8x less** memory than training it. A trained 4B model runs fine on your laptop; it's *training* that overflows. STRATUM's job: make training behave more like running - small footprint - while still teaching new skills.
+Running a model needs roughly **8x less** memory than training it. A trained 4B model runs fine on your laptop - it's *training* that overflows. STRATUM's job: make training behave more like running - small footprint - while still teaching new skills.
 
 ## Lever 1 - train few dials (LoRA)
 

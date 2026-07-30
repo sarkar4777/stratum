@@ -55,7 +55,7 @@ An adapter is **tiny** (megabytes), **separate** (its own file beside the frozen
 ## Merge vs keep-separate
 
 Two ways to use a trained adapter:
-1. **Keep separate** - load frozen base + adapter at runtime; model computes `W + BxA` live. Flexible: swap adapters freely.
+1. **Keep separate** - load frozen base + adapter at runtime, and the model computes `W + BxA` live. Flexible: swap adapters freely.
 2. **Merge in** - do the `W + BxA` math once, save a standalone model. Simpler, slightly faster (no separate adapter to apply).
 
 STRATUM fuses strata together, then applies the result onto the base, producing one clean model - but the strata exist as separate files first, which is what enables piece-by-piece building.
@@ -64,6 +64,8 @@ STRATUM fuses strata together, then applies the result onto the base, producing 
 
 **QLoRA** = LoRA + compressing the frozen base to 4 bits (doc 1's bonus lever). Since the base is only read, compressing it costs almost no quality, and it's what fits a 4B model's training on 8 GB. STRATUM turns this on by default when you have a GPU (`--no-4bit` disables it).
 
+Credit where due: LoRA is from Hu et al., "LoRA: Low-Rank Adaptation of Large Language Models" (2021), and QLoRA from Dettmers et al., "QLoRA: Efficient Finetuning of Quantized LLMs" (2023). STRATUM builds on Hugging Face's PEFT library, which implements both.
+
 ## In the code
 
 STRATUM uses Hugging Face PEFT for LoRA. In `stratum/train.py`:
@@ -71,7 +73,7 @@ STRATUM uses Hugging Face PEFT for LoRA. In `stratum/train.py`:
 ```python
 lora_cfg = LoraConfig(
     r=rank, # your --rank
-    lora_alpha=rank * 2, # scaling; convention is 2x rank
+    lora_alpha=rank * 2, # scaling, convention is 2x rank
     lora_dropout=0.05,
     target_modules="all-linear", # adapt every linear grid
     task_type="CAUSAL_LM",
@@ -79,13 +81,13 @@ lora_cfg = LoraConfig(
 model = get_peft_model(base_model, lora_cfg)
 ```
 
-`target_modules="all-linear"` puts an adapter on every linear grid, which outperforms the old habit of adapting only some. `lora_alpha` is a scaling factor (`BxA` is multiplied by `alpha/r`); keeping it at `2xr` means changing rank doesn't silently change your effective learning rate.
+`target_modules="all-linear"` puts an adapter on every linear grid, which outperforms the old habit of adapting only some. `lora_alpha` is a scaling factor (`BxA` is multiplied by `alpha/r`), and keeping it at `2xr` means changing rank doesn't silently change your effective learning rate.
 
 ## What you now know
 
 - An **adapter** freezes the model and trains a small add-on.
 - **LoRA** builds it as two small grids whose product `BxA` is the adjustment - ~1% the size.
-- **Rank** sets capacity; too low and it plateaus. 16 for style, 32-64 for knowledge.
+- **Rank** sets capacity - too low and it plateaus. 16 for style, 32-64 for knowledge.
 - Adapters are tiny, separate, additive - i.e. **mergeable strata**.
 - **QLoRA** compresses the frozen base to fit a laptop.
 

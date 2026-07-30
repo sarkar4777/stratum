@@ -6,7 +6,7 @@
 
 ## Recap: what an optimizer does
 
-Training is: predict, measure loss, compute the **gradient** (fix direction per dial), **nudge**. The **optimizer** does the nudging - it turns each dial's gradient *direction* into an actual *step*. The gradient says "up"; it doesn't say "how far." Deciding how far, well, is where cleverness lives.
+Training is: predict, measure loss, compute the **gradient** (fix direction per dial), **nudge**. The **optimizer** does the nudging - it turns each dial's gradient *direction* into an actual *step*. The gradient says "up" - it doesn't say "how far." Deciding how far, well, is where cleverness lives.
 
 ## The naive approach and its flaw
 
@@ -22,7 +22,7 @@ Effective, but those **two notes per dial** are the single biggest chunk of trai
 
 ## Muon's different idea: fix the whole grid at once
 
-Here's the real divergence. AdamW treats every dial **individually**. But dials aren't a loose bag - they're organized into **grids** (weight matrices, doc 3). Muon uses that structure. It looks at a grid's entire update and asks a question AdamW can't: *is this update lopsided across directions - are a few directions getting all the movement while others get none?* Then it **rebalances so every direction gets a fair share.** The technical term is **orthogonalization**; experts say Muon "orthogonalizes the momentum."
+Here's the real divergence. AdamW treats every dial **individually**. But dials aren't a loose bag - they're organized into **grids** (weight matrices, doc 3). Muon uses that structure. It looks at a grid's entire update and asks a question AdamW can't: *is this update lopsided across directions - are a few directions getting all the movement while others get none?* Then it **rebalances so every direction gets a fair share.** The technical term is **orthogonalization** - experts say Muon "orthogonalizes the momentum."
 
 ## Seeing it happen
 
@@ -66,6 +66,8 @@ opts = [Muon(muon_params, lr=2e-2), torch.optim.AdamW(adamw_params, lr=1e-3)]
 ```
 
 **It's newer than AdamW.** AdamW has a decade of testing everywhere. Muon is newer, though proven in serious large-model training and well-suited to STRATUM's matrix-heavy adapter work. If you ever want the conservative choice, `--optimizer adamw` switches everything to AdamW.
+
+**Credit where due.** Muon was created by Keller Jordan (2024), building on Jeremy Bernstein's work on orthogonalized updates, and the Newton-Schulz coefficients in STRATUM's implementation are the ones Jordan published. STRATUM's version favors clarity and adds the safety guards described above.
 
 **Safety guards.** STRATUM's Muon skips any update that isn't finite (from a bad batch or numerical underflow) rather than letting a NaN poison training - a robustness detail that matters on small datasets. You'll never silently corrupt a run.
 

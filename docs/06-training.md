@@ -15,17 +15,24 @@ Assistant: {"total": 88}
 
 **Which part should the model be trained to produce?** Only the response. The prompt is *context* - the model should learn to respond to it, not to generate it. You enforce this with a **loss mask**: mark the prompt tokens as "ignore" (the value `-100`) so loss is computed only on the response.
 
-STRATUM does this in `stratum/data.py`. It tokenizes the prompt-only text to find where the response starts, then masks everything before it:
+STRATUM does this in `stratum/data.py`. The boundary between prompt and response must be *exact*, so the two parts are tokenized separately and joined - never tokenized as one string and then guessed apart, because tokenizers sometimes merge characters across the seam:
 
 ```python
-prompt_ids = tokenizer(prompt_text)["input_ids"]
-full_ids = tokenizer(full_text)["input_ids"]
-labels = list(full_ids)
-for i in range(len(prompt_ids)): # mask the prompt portion
-    labels[i] = -100 # -100 = "ignore in loss"
+prompt_ids = tokenizer(prompt_text)["input_ids"]     # rendered chat prompt
+response_ids = tokenizer(response_text)["input_ids"] # response + end marker
+input_ids = prompt_ids + response_ids
+labels = [-100] * len(prompt_ids) + response_ids     # -100 = "ignore in loss"
 ```
 
 **If you get this wrong**, the model trains to generate prompts and questions instead of answers. There's no error message. Loss looks normal. The model is just quietly worse. STRATUM's test `test_loss_mask_covers_prompt_only` guards this, and you can see it yourself: a healthy batch has 40-80% of tokens masked.
+
+Two related guards live in the same code. If a prompt alone is longer than `--max-len`, that row would be *entirely* masked - the model would "train" on it and learn nothing - so STRATUM refuses with a clear error instead of silently skipping. And if a row's response gets cut by `--max-len`, whatever survives still trains normally.
+
+## A wrinkle: thinking models
+
+Some recent models (Qwen3 among them, including STRATUM's default base) are **thinking models**: before answering they write out reasoning inside `<think>...</think>` tags. Useful for hard open-ended questions, wrong for a specialized extractor that should answer `{"total": 88}` and stop - the thinking burns tokens and time, and your training data has no thinking in it.
+
+STRATUM handles this for you everywhere: chat templates are rendered with thinking disabled during training AND inference so the two match, and any think block a model still emits is stripped before scoring, chatting, or writing teacher-generated training data. You don't have to do anything - but now you know why the code passes `enable_thinking=False` around.
 
 ## The training loop, annotated
 
@@ -33,23 +40,25 @@ From `stratum/train.py`, the heart of it:
 
 ```python
 for epoch in range(epochs):
-    random.shuffle(rows) # different order each epoch
+    random.shuffle(rows)                 # different order each epoch
     for step, (input_ids, attn, labels) in enumerate(batches):
         out = model(input_ids=input_ids, attention_mask=attn, labels=labels)
         if not torch.isfinite(out.loss): # safety: skip bad batch
             continue
-        loss = out.loss / grad_accum # scale for accumulation
-        loss.backward() # compute gradients
+        loss = out.loss / grad_accum     # scale for accumulation
+        loss.backward()                  # compute gradients
         if (step + 1) % grad_accum == 0: # every grad_accum batches:
             clip_grad_norm_(params, 1.0) # clip to prevent explosions
-            for opt in opts: opt.step(); opt.zero_grad() # update, reset
+            for opt in opts:
+                opt.step()               # update the dials
+                opt.zero_grad()          # reset for the next accumulation
 ```
 
 Four things in there matter and are explained next.
 
 ## Batching
 
-Processing one example at a time wastes the GPU. A **batch** processes several at once. STRATUM pads examples in a batch to equal length and builds an attention mask so padding is ignored. `--batch-size` controls how many; bigger is faster but uses more memory.
+Processing one example at a time wastes the GPU. A **batch** processes several at once. STRATUM pads examples in a batch to equal length and builds an attention mask so padding is ignored. `--batch-size` controls how many - bigger is faster but uses more memory.
 
 ## Gradient accumulation
 
@@ -69,16 +78,17 @@ Occasionally a batch produces enormous gradients that would lurch the weights in
 
 | Setting | Default | Why |
 |---|---|---|
-| `--base` | Qwen3-1.7B | Small enough for most laptops; run `stratum doctor` for yours |
-| `--rank` | 16 | Right for style/format skills; raise to 32-64 for knowledge |
+| `--base` | Qwen3-1.7B | Small enough for most laptops, run `stratum doctor` for yours |
+| `--rank` | 16 | Right for style/format skills, raise to 32-64 for knowledge |
 | `--lr` (Muon) | 2e-2 | Muon tolerates larger LRs than AdamW |
+| `--adamw-lr` | 1e-3 | For the params Muon skips, or everything with `--optimizer adamw` |
 | `--epochs` | 3 | Enough passes for a small skill dataset without over-memorizing |
 | `--batch-size` | 4 | Balance of speed and memory |
 | `--grad-accum` | 4 | Effective batch 16 |
-| `--max-len` | 1024 | Covers most prompt+response pairs; raise for long documents |
-| `--optimizer` | muon | Lighter and fewer steps; `adamw` for the conservative choice |
+| `--max-len` | 1024 | Covers most prompt+response pairs, raise for long documents |
+| `--optimizer` | muon | Lighter and fewer steps, `adamw` for the conservative choice |
 | `--seed` | 42 | Reproducibility - same seed, same result |
-| 4-bit | on (GPU) | QLoRA, to fit bigger bases; `--no-4bit` to disable |
+| 4-bit | on (GPU) | QLoRA, to fit bigger bases, `--no-4bit` to disable |
 
 ## Reading a healthy run
 
@@ -91,15 +101,15 @@ epoch 3/3 avg loss 0.5113
 ```
 
 - `trainable% 0.26` - you're training a quarter of one percent. That's LoRA working.
-- Loss falling smoothly each epoch - healthy. Flat loss means LR too low or rank too low for the skill. Rising eval loss (doc 7) means over-training - lower epochs.
+- Loss falling smoothly each epoch - healthy. Flat loss means LR too low or rank too low for the skill. Rising eval loss (doc 8) means over-training - lower epochs.
 
 ## Watch for over-specialization
 
-Training hard on one narrow skill can make the model worse at everything else. Guard: keep a few general questions and check them after training (doc 7). If general ability collapsed, lower epochs or rank.
+Training hard on one narrow skill can make the model worse at everything else. Guard: keep a few general questions and check them after training (doc 8). If general ability collapsed, lower epochs or rank.
 
 ## What you now know
 
-- The **loss mask** trains only on the response; getting it wrong silently ruins fine-tunes.
+- The **loss mask** trains only on the response - getting it wrong silently ruins fine-tunes.
 - **Batching** + **gradient accumulation** give a stable effective batch within your memory.
 - **Gradient clipping** and Muon's NaN guard keep training stable.
 - Every default has a reason, and you now know how to change each for your case.
