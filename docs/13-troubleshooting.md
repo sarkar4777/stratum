@@ -62,6 +62,14 @@ It works, but set expectations: a few hundred pairs on a 0.6B base is an hours-n
 
 Either the learning rate is too low for the optimizer you chose (Muon's default is `2e-2`, AdamW wants around `1e-4` to `1e-3`), or the rank is below what the skill needs and you've hit the ceiling from doc 3. Raise `--rank` before blaming the method.
 
+## Corpus ingest says a format needs an extra library
+
+The document parsers are optional dependencies so the core install stays light. `pip install 'stratum-slm[corpus]'` brings PDF, Word, PowerPoint, Excel, and image support in one go.
+
+## "no extractable text - this is probably a scanned PDF"
+
+The PDF is pictures of pages, with no text layer to read. Two routes: run OCR over it before ingesting, or export its pages as images and ingest those with a vision teacher (`--images hf`). Doc 14 covers both.
+
 ## Something else
 
 Open an issue with your `stratum doctor` output and the full error. Hardware reports (GPU, VRAM, which base worked) are welcome even when nothing is broken - they build the community table in CONTRIBUTING.md.

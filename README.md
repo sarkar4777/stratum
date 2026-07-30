@@ -50,6 +50,10 @@ pip install bitsandbytes # for 4-bit / QLoRA on NVIDIA GPUs
 # understand it first (no GPU, ~20s)
 python scripts/demo_concepts.py
 
+# have a document corpus instead of ready-made training data? doc 14:
+# stratum corpus ingest --in your-docs/ --out corpus/
+# stratum corpus pairs --chunks corpus/chunks.jsonl --instruction "..." --out data/skill.jsonl
+
 # check your hardware
 stratum doctor
 
@@ -119,6 +123,7 @@ Each stratum is trained on its own, one at a time, so you never hold more than o
 | 11 | [Glossary](docs/11-glossary.md) | Every term, full form, plain definition |
 | 12 | [For experienced developers](docs/12-for-experienced-developers.md) | Every concept mapped to patterns you know |
 | 13 | [Troubleshooting](docs/13-troubleshooting.md) | The problems people actually hit, with fixes |
+| 14 | [From a corpus to a model](docs/14-from-corpus-to-model.md) | Thousands of real documents and images in, tested SLM out - and the RAG boundary |
 
 ## Built for industry-specific models
 

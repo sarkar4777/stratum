@@ -18,6 +18,10 @@
 
 **Catastrophic forgetting / over-specialization** - When training hard on a narrow skill makes the model worse at everything else. Guard by limiting epochs and checking general ability.
 
+**Chunk / chunking** - Cutting a long document into overlapping windows a teacher model can read whole (about 2,400 characters here). The overlap keeps facts that straddle a cut intact in at least one chunk.
+
+**Corpus** - An organization's pile of real documents and images - the raw material the corpus pipeline (doc 14) turns into training data.
+
 **DARE** - A merge method that randomly drops most of each stratum's small adjustments and rescales the rest, reducing crosstalk when fusing many strata. From Yu et al. (2023). STRATUM seeds the randomness so the same merge always gives the same model.
 
 **Delta** - A stratum's weight adjustment, `scaling x (B @ A)`, added onto a base weight during merging.
@@ -74,15 +78,19 @@
 
 **Momentum** - A smoothed average of a parameter's recent gradients. The single note Muon keeps.
 
-**Muon (MomentUm Orthogonalized by Newton-schulz)** - STRATUM's optimizer for weight matrices. Rebalances each matrix's update so every direction shares (orthogonalization), keeps one note per parameter, needs fewer steps.
+**Muon (MomentUm Orthogonalized by Newton-schulz)** - STRATUM's optimizer for weight matrices. Rebalances each matrix's update so every direction shares (orthogonalization) and keeps one note per parameter - half AdamW's optimizer memory, with a step advantage that grows with model size (doc 4's race).
 
 **Newton-Schulz iteration** - The short routine (a few matrix multiplies) Muon uses to orthogonalize an update without computing singular values directly.
+
+**OCR (optical character recognition)** - Software that reads pictures of text, e.g. scanned pages, into actual text. A scanned PDF needs OCR (or a vision teacher) before it can be ingested.
 
 **Optimizer** - The algorithm that turns gradients into parameter updates. SGD, AdamW, Muon.
 
 **Orthogonalization** - Muon's core move: flattening a matrix update's singular values toward 1 so no direction dominates.
 
 **Parameter / weights** - The billions of numbers inside a model. Training adjusts them.
+
+**PII (personally identifiable information)** - Names, emails, phone numbers, identifiers. `stratum corpus ingest --redact` scrubs the obvious kinds as a second net - a regulated deployment runs its own PII pipeline before ingest.
 
 **PEFT (Parameter-Efficient Fine-Tuning)** - The family of methods (including LoRA) that train a small add-on instead of the whole model. Also the Hugging Face library STRATUM uses.
 
@@ -95,6 +103,8 @@
 **Quantization** - Storing numbers with fewer bits (e.g. 4 vs 16) to save memory, at small quality cost. Used on the frozen base to fit a laptop.
 
 **QLoRA** - LoRA plus quantization of the frozen base. Fits multi-billion-parameter training on a laptop.
+
+**RAG (retrieval-augmented generation)** - Answering from documents by looking the relevant passages up at question time and pasting them into the model's prompt. The right tool for knowledge (exact, citable, current), where fine-tuning is the right tool for skills - doc 14 draws the line.
 
 **Rank (r)** - The size of a LoRA adapter's small matrices. It controls how complex an adjustment it can represent. Too low and it plateaus. 16 for style, 32-64 for knowledge.
 
@@ -119,5 +129,7 @@
 **Thinking model** - A model (Qwen3 among them) whose chat template lets it write reasoning inside `<think>` tags before answering. STRATUM disables thinking during training and inference so a specialized model answers directly, and strips any think blocks that appear anyway.
 
 **TIES** - A merge method that trims each stratum to its most important adjustments and resolves direction conflicts by majority vote. From Yadav et al. (2023).
+
+**Vision-language model (VLM)** - A model that reads images the way a language model reads text. STRATUM uses one as a vision teacher to extract image content into the corpus - fine-tuning a VLM itself is a different pipeline and out of current scope.
 
 **VRAM (Video RAM)** - Graphics card memory. The binding constraint on what you can train.

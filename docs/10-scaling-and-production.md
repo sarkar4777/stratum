@@ -114,7 +114,7 @@ This is how STRATUM fits a real client engagement:
 
 1. **Define skills.** Sit with the client's practitioners and enumerate the concrete tasks (extract these fields, classify these tickets, follow this policy). Each becomes a stratum.
 2. **Build a test set per skill** *first*, with the client's experts writing the correct answers. This is the client's IP and your quality gate.
-3. **Assemble data per stratum** from their systems plus synthetic generation. Where a stronger model is available, **distill** it (doc 7) - either have it generate clean training pairs, or teach the student directly - to lift small-model quality toward the teacher.
+3. **Assemble data per stratum** from their systems plus synthetic generation - and when the raw material is a document corpus rather than ready-made pairs, run it through the corpus pipeline (doc 14) first. Where a stronger model is available, **distill** it (doc 7) - either have it generate clean training pairs, or teach the student directly - to lift small-model quality toward the teacher.
 4. **Write a recipe** (`stratum stack`) so the whole build is one reproducible command, checked into version control.
 5. **Train, fuse, evaluate.** Iterate on the strata that miss their eval targets - you know exactly which one to fix.
 6. **Serve** in the client's own environment (their cloud tenancy or on-prem), which is usually mandatory for regulated industries - the model and data never leave.
