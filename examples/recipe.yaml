@@ -1,5 +1,7 @@
 # A complete STRATUM build. Run with: stratum stack examples/recipe.yaml
-# Trains every stratum listed, then fuses them into one model.
+# Trains every stratum listed, fuses them into one model, then runs the
+# eval gates at the bottom - the build fails if a score misses its bar.
+# Check it fits your machine first: stratum plan examples/recipe.yaml
 
 base_model: Qwen/Qwen3-1.7B
 optimizer: muon
@@ -23,3 +25,11 @@ merge:
   weights: [1.0, 1.0]
 
 output_model: models/invoice-slm
+
+evals:
+  - test: examples/test-extract.jsonl
+    scorer: json_field
+    min_score: 0.6 # raise as your data grows - these examples are tiny
+  - test: examples/test-classify.jsonl
+    scorer: exact
+    min_score: 0.6

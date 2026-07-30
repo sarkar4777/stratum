@@ -179,6 +179,9 @@ def test_stack_runs_a_whole_recipe(tiny_base, tmp_path, monkeypatch):
              "out": str(tmp_path / "s2"), "rank": 2, "epochs": 1},
         ],
         "merge": {"method": "linear", "weights": [1.0, 1.0]},
+        # A gate the tiny random model can always clear, to prove gates run.
+        "evals": [{"test": str(examples / "test.jsonl"),
+                   "scorer": "contains", "min_score": 0.0}],
     }
     rp = tmp_path / "recipe.yaml"
     rp.write_text(yaml.safe_dump(recipe), encoding="utf-8")
@@ -191,6 +194,13 @@ def test_stack_runs_a_whole_recipe(tiny_base, tmp_path, monkeypatch):
     card = read_stratum_card(str(tmp_path / "s1"))
     assert card["max_len"] == 96  # recipe-wide setting reached the training run
     assert card["batch_size"] == 2
+
+    # A gate the tiny model cannot clear must fail the build.
+    recipe["evals"][0]["min_score"] = 1.01
+    rp.write_text(yaml.safe_dump(recipe), encoding="utf-8")
+    monkeypatch.setattr(sys, "argv", ["stratum", "stack", str(rp)])
+    with pytest.raises(SystemExit, match="eval gates"):
+        main()
 
 
 def test_train_handles_utf8_data(tiny_base, tmp_path, skill_file):
