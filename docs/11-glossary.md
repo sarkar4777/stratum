@@ -68,6 +68,10 @@
 
 **PEFT (Parameter-Efficient Fine-Tuning)** - The family of methods (including LoRA) that train a small add-on instead of the whole model. Also the Hugging Face library STRATUM uses.
 
+**Plan / preflight** - `stratum plan` estimates each stratum's training memory against this machine's hardware and says fits, tight, or does not fit, with fixes or a rented-hardware handoff. `stratum stack` runs the same check before training.
+
+**Eval gate** - A test set plus a minimum score in a recipe's `evals` section. The build fails if the merged model scores below the bar, making a recipe a self-verifying build spec.
+
 **Pretraining** - The original, enormously expensive training on trillions of tokens. You don't do this - you start from a pretrained model.
 
 **Quantization** - Storing numbers with fewer bits (e.g. 4 vs 16) to save memory, at small quality cost. Used on the frozen base to fit a laptop.

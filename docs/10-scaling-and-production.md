@@ -16,6 +16,56 @@ Your laptop proved the pipeline on a 1.7B base. To scale quality, move to a bigg
 
 The key economic fact: **training is a short burst, serving is a small steady load.** You rent a big GPU for hours to train, then serve the finished model on something small forever. Renting an 80 GB GPU costs a few dollars an hour, and a full multi-stratum build is a few tens of dollars. Don't over-provision - the recipe runs the same on rented hardware as on your laptop, just faster.
 
+## Will it fit here? Ask before you build
+
+You don't have to guess whether a build fits your machine, and you shouldn't find out by running out of memory an hour in. `stratum plan` checks a specific recipe against the hardware it's running on:
+
+```bash
+stratum plan examples/recipe.yaml
+```
+
+```
+STRATUM plan
+------------------------------------------
+Hardware: NVIDIA GeForce RTX 3070, 8.0 GB VRAM, 4-bit available
+Recipe:   examples/recipe.yaml
+
+  extract      needs ~3.9 GB   fits
+  classify     needs ~3.9 GB   fits
+
+Verdict: build locally. `stratum stack examples/recipe.yaml`
+```
+
+For each stratum it estimates the training memory from doc 1's arithmetic - the frozen weights (compressed or not), the adapter's training overhead, and the activations that grow with batch size and sequence length. The estimate is deliberately rough, good to maybe 30 percent, because that's enough to sort "fits" from "will not fit", which is the only decision it makes. When something doesn't fit, the plan suggests the levers in order: batch size 1 with more accumulation, 4-bit if it's off, a 4-bit teacher for distillation strata.
+
+`stratum stack` runs this same check as a preflight and refuses a build that clearly cannot fit (override with `--force` if you know better - the estimate can be wrong in your favor).
+
+## When it doesn't fit: the same build on rented hardware
+
+When the verdict is "does not fit", the plan names what would work - a 24, 48, or 80 GB card depending on the base - and any hourly GPU service covers it: RunPod, Lambda Cloud, Vast.ai, a Colab GPU runtime, or your company's own cloud tenancy. STRATUM stays neutral about which, because the build is just a script:
+
+```bash
+stratum plan examples/recipe.yaml --emit-remote remote/
+```
+
+This writes `remote/build-and-test.sh`. Copy the project folder to the rented box, run the script, and it installs STRATUM, re-checks the plan on the remote hardware, runs the whole recipe - training, merging, and the recipe's eval gates - and packages the finished model as a tarball to copy back. A failed gate fails the script, so the tarball you bring home is a *tested* model. The burst costs the hourly rate times an hour or three, then the box is gone and the model is yours.
+
+## The recipe tests what it builds
+
+A recipe can end with `evals` - the gates the finished model must clear:
+
+```yaml
+evals:
+  - test: examples/test-extract.jsonl
+    scorer: json_field
+    min_score: 0.6
+  - test: examples/test-classify.jsonl
+    scorer: exact
+    min_score: 0.6
+```
+
+`stratum stack` runs them after the merge and exits non-zero if any score misses its bar. This is what makes the recipe a complete, self-verifying build spec: the same file trains, fuses, and tests, unattended, on your laptop, a rented box, or CI.
+
 ## Scaling the data per stratum
 
 Laptop prototypes work with a few hundred pairs. Production strata want more:
@@ -93,6 +143,7 @@ stratum eval models/my-slm --test tests/extract.jsonl \
 ## What you now know
 
 - **Training bursts, serving steady** - rent big GPUs briefly, serve on something small forever.
+- **`stratum plan`** answers "fits here?" before a build, suggests fixes, and hands the build to rented hardware when needed - with the recipe's own **eval gates** making every build a tested build.
 - Scale **data per stratum** and **number of strata**, using grouped fusion or swappable adapters when strata multiply.
 - Serve with **vLLM** (or llama.cpp/Ollama at the edge), then quantize and re-evaluate.
 - The **production loop** and why strata suit **regulated, industry-specific** SLMs: residency, audit, incremental change, reuse, cost.

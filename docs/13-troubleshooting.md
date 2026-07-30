@@ -6,7 +6,7 @@
 
 ## Out of memory during training
 
-The levers, in the order to pull them:
+First, `stratum plan recipe.yaml` - it estimates what each stratum needs on this machine and suggests the fix, or tells you honestly that the build belongs on rented hardware (doc 10). The levers, in the order to pull them:
 
 1. `--batch-size 1 --grad-accum 16` - same effective batch (doc 6), a fraction of the memory.
 2. Make sure 4-bit is on. It's the default on NVIDIA GPUs, but only if `bitsandbytes` is installed - `stratum doctor` tells you.

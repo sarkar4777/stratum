@@ -26,6 +26,8 @@ stratum doctor
 
 `doctor` reports your GPU/VRAM and recommends a base model. Use its recommendation for `--base`. When unsure, start smaller - it proves your pipeline before you scale.
 
+Once you have a recipe (the one-command way at the end of this doc), `stratum plan recipe.yaml` goes further: it checks that *specific* build against this machine, suggests setting changes when it's tight, and writes a ready-to-run script for a rented GPU box when it doesn't fit at all (doc 10).
+
 ## Step 2 - prepare skill data
 
 Each skill is a JSONL file, one `{"prompt","response"}` per line. See `examples/`. Quality rules:
@@ -157,6 +159,8 @@ stratum stack examples/recipe.yaml
 This trains every stratum and fuses them in one command - the reproducible build you'd check into a repo and run in CI. Change requirements? Edit the recipe, add a stratum, re-run.
 
 Two properties make recipes safe to rely on. Every training setting (`lr`, `batch_size`, `grad_accum`, `max_len`, `seed`, `load_4bit`...) can be set recipe-wide and overridden per stratum, so the recipe expresses everything the CLI can. And the recipe is **validated before anything trains** - a misspelled key like `epoch:` is rejected with the list of valid keys, instead of being silently ignored while your build trains with a default you didn't choose.
+
+A recipe can also end with **eval gates** (`evals:` - see `examples/recipe.yaml`): test sets with minimum scores that run right after the merge. A build that misses a bar fails, which turns the recipe into a self-verifying spec you can run unattended - locally, on a rented GPU box via `stratum plan --emit-remote`, or in CI. Docs 8 and 10 cover both ends of this.
 
 ## The whole thing, condensed
 

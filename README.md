@@ -66,11 +66,14 @@ stratum eval models/my-slm --test examples/test-classify.jsonl --scorer exact
 stratum chat models/my-slm
 ```
 
-Or run the entire build from one recipe:
+Or run the entire build from one recipe - which also carries its own eval gates, so a finished build is a tested build:
 
 ```bash
-stratum stack examples/recipe.yaml
+stratum plan examples/recipe.yaml   # fits this machine? if not - what would, and where to rent it
+stratum stack examples/recipe.yaml  # train everything, fuse, run the eval gates
 ```
+
+If `plan` says the build doesn't fit locally, `stratum plan recipe.yaml --emit-remote remote/` writes a script that runs the identical build and tests on any hourly GPU box and packages the model to bring back. [Doc 10](docs/10-scaling-and-production.md) walks through it.
 
 ## What the pipeline looks like
 
