@@ -95,6 +95,24 @@ def test_remote_bundle_contents(tmp_path):
     assert "tar -czf" in text
 
 
+def test_stack_preflight_blocks_clear_gpu_no_fit(tmp_path, monkeypatch):
+    import sys
+    import yaml
+    import stratum.plan
+    from stratum.__main__ import main
+
+    recipe = {"base_model": "fake/Fake-8B", "output_model": str(tmp_path / "m"),
+              "load_4bit": False,
+              "strata": [{"name": "x", "skill": "s.jsonl", "out": "o"}]}
+    rp = tmp_path / "r.yaml"
+    rp.write_text(yaml.safe_dump(recipe), encoding="utf-8")
+
+    monkeypatch.setattr(stratum.plan, "probe_hardware", lambda: dict(GPU_8))
+    monkeypatch.setattr(sys, "argv", ["stratum", "stack", str(rp)])
+    with pytest.raises(SystemExit, match="not fit"):
+        main()
+
+
 def test_recipe_validates_evals(tmp_path):
     import yaml
     from stratum.recipe import load_recipe

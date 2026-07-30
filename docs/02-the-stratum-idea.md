@@ -67,9 +67,9 @@ This is why STRATUM suits building **domain-specific** models. A real deployment
 Concretely, a stratum is a folder containing:
 - a small adapter weights file (a few megabytes),
 - an adapter config (rank, which layers it touches),
-- a `stratum_card.json` recording its base model, skill file, training settings, and final loss - its provenance.
+- a `stratum_card.json` recording its base model, skill file and that file's SHA-256 fingerprint, every training setting, the final loss, and when it was built - its provenance.
 
-That card is what lets STRATUM verify, at fuse time, that all your strata came from the same base and belong together. In a regulated industry, it's also your audit trail: which skill, trained on what, with which settings.
+That card is what lets STRATUM verify, at fuse time, that all your strata came from the same base and belong together. In a regulated industry, it's also your audit trail: which skill, trained on exactly which data (the fingerprint proves the file wasn't swapped later), with which settings, when. A merged model carries all of its input cards forward in its `stratum_merge.json`, so the finished artifact holds its complete build history.
 
 ## The honest limit, stated early
 

@@ -1,6 +1,8 @@
 # build artifacts a user produces locally
 strata/
 models/
+reports/
+remote/
 *.egg-info/
 dist/
 build/

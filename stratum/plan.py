@@ -118,7 +118,7 @@ def plan_stratum(name: str, params_b: float | None, hw: dict,
     out["need_gb"] = need
     out["verdict"] = _verdict(need, hw["vram_gb"])
 
-    if out["verdict"] is not FITS:
+    if out["verdict"] != FITS:
         # Suggest the levers in the order docs/13 recommends pulling them.
         if batch_size > 1:
             smaller = estimate_vram_gb(params_b, use_4bit, 1, max_len,

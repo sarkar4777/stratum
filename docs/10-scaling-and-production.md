@@ -123,7 +123,7 @@ This is how STRATUM fits a real client engagement:
 ## Why this beats one big fine-tune for industry
 
 - **Data residency** - train and serve entirely in the client's environment - nothing leaves.
-- **Auditability** - each stratum's `stratum_card.json` records what skill was trained on what data with what settings. In a regulated industry that's the audit trail.
+- **Auditability** - each stratum's `stratum_card.json` records what skill was trained on what data (down to the data file's SHA-256 fingerprint) with what settings and when, and the merged model's `stratum_merge.json` carries every input card plus the merge method, weights, and seed. In a regulated industry that's the audit trail, and it's machine-readable.
 - **Incremental compliance** - a rule changes, you retrain one policy stratum and re-fuse. No full retrain.
 - **Reuse** - a "extract amounts from contracts" stratum built for one client drops into the next, given a shared base. Treat strata from outside your team like any third-party artifact - doc 5 covers the safety checks merging applies.
 - **Cost** - one small serving GPU forever, plus a few tens of dollars of training burst per build. Far cheaper than per-token frontier-API calls at volume.

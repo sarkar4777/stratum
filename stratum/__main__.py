@@ -175,18 +175,24 @@ def cmd_stack(args):
         sys.exit(str(e))
 
     # Preflight: refuse a build the hardware clearly cannot run, before it
-    # trains for an hour and dies. The estimate is rough, so only a clear
-    # no-fit stops the build, and --force overrides even that.
+    # trains for an hour and dies. Only a GPU memory wall is a hard stop -
+    # CPU-only training is merely slow, so there it warns and continues.
+    # The estimate is rough, so --force overrides even a clear no-fit.
     from .plan import NO_FIT, plan_recipe, probe_hardware, rental_advice
     hw = probe_hardware()
     plan = plan_recipe(recipe, hw)
-    if plan["verdict"] == NO_FIT and not args.force:
-        sys.exit(
-            f"This build likely will not fit on this machine "
-            f"(run `stratum plan {args.recipe}` for the details and fixes).\n"
-            f"For the training burst, {rental_advice(plan['base_params_b'])}\n"
-            f"Use --force to try anyway."
-        )
+    if plan["verdict"] == NO_FIT:
+        if hw["cuda"] and not args.force:
+            sys.exit(
+                f"This build likely will not fit in this GPU's memory "
+                f"(run `stratum plan {args.recipe}` for the details and fixes).\n"
+                f"For the training burst, {rental_advice(plan['base_params_b'])}\n"
+                f"Use --force to try anyway."
+            )
+        if not hw["cuda"]:
+            print(f"Warning: no GPU here, so this build will be very slow. "
+                  f"For a training burst instead, "
+                  f"{rental_advice(plan['base_params_b'])}\n")
 
     base = recipe["base_model"]
     strata_dirs = []
@@ -336,7 +342,8 @@ def main():
     tg.add_argument("--instruction", required=True, help="what the skill should do, one line")
     tg.add_argument("--out", required=True, help="output training JSONL (re-run to resume)")
     tg.add_argument("--teacher", default="hf", choices=["hf", "openai", "anthropic", "echo"],
-                    help="teacher backend")
+                    help="teacher backend. Note: openai/anthropic send every seed "
+                         "to that API - use hf (local) for data that must not leave")
     tg.add_argument("--model", default=None, help="teacher model name/id for the chosen backend")
     tg.set_defaults(func=cmd_teacher_gen)
 

@@ -66,7 +66,7 @@ d1, d2 = B1 @ A1, B2 @ A2
 print(f"base weight norm: {np.linalg.norm(Wb):.3f}")
 print(f"skill-1 delta norm: {np.linalg.norm(d1):.3f}")
 print(f"skill-2 delta norm: {np.linalg.norm(d2):.3f}")
-for w1, w2 in [(1.0, 0.0), (0.0, 1.0), (0.5, 0.5), (0.7, 0.3)]:
+for w1, w2 in [(1.0, 0.0), (0.0, 1.0), (1.0, 1.0), (0.7, 0.3)]:
     m = Wb + w1 * d1 + w2 * d2
     print(f" weights ({w1}, {w2}) -> merged norm {np.linalg.norm(m):.3f}")
 print("\nEach skill is a small delta on the SAME base. Fuse by weighted sum.")

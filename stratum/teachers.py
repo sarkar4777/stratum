@@ -11,6 +11,10 @@ four backends and stays vendor-neutral so you can use whatever you have access t
 
 Every backend fails LOUDLY and CLEARLY if something is missing - a normal
 enterprise developer (Java/.NET/Python) should never be left guessing.
+
+The API backends carry a default model id, but provider lineups change - pass
+--model with your provider's current recommendation rather than relying on the
+default staying fresh forever.
 """
 from __future__ import annotations
 
@@ -25,7 +29,7 @@ def get_teacher(backend: str, model: str | None = None):
     if backend == "openai":
         return _openai_teacher(model or "gpt-4o-mini")
     if backend == "anthropic":
-        return _anthropic_teacher(model or "claude-3-5-sonnet-latest")
+        return _anthropic_teacher(model or "claude-opus-5")
     if backend == "echo":
         return lambda prompt: "(echo teacher - replace with a real backend)"
     raise ValueError(f"Unknown teacher backend '{backend}'. "

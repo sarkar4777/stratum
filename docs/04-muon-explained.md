@@ -41,7 +41,7 @@ Verify it: `python scripts/demo_concepts.py`.
 
 ## The one piece of machinery
 
-To flatten those singular values without the slow step of computing them, Muon runs a short **Newton-Schulz iteration** - five matrix multiplications that push all singular values toward 1. It's a deliberate fast approximation. That's the "little extra compute" Muon spends. In return it keeps **one** note per dial (momentum) instead of two, and needs fewer steps. Here's the actual core, from `stratum/muon.py`:
+To flatten those singular values without the slow step of computing them, Muon runs a short **Newton-Schulz iteration** - five matrix multiplications that push all singular values toward 1. It's a deliberate fast approximation. That's the "little extra compute" Muon spends. In return it keeps **one** note per dial (momentum) instead of two, and needs fewer steps. Here's the core, from `stratum/muon.py`, trimmed of its shape handling and safety guards:
 
 ```python
 def newton_schulz(G, steps=5):

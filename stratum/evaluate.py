@@ -131,7 +131,11 @@ def run_eval(model_dir: str, test_path: str, scorer: str = "contains",
                 mark = "OK " if s >= 0.999 else ("~~ " if s > 0 else "XX ")
                 print(f"{mark} score {s:.2f} expected: {str(row['expected'])[:36]:36} "
                       f"got: {answer.strip()[:36]}")
+        # Release this model before a possible baseline model loads, so both
+        # never sit in GPU memory at once.
         del model
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
         return results
 
     results = eval_one_model(model_dir)

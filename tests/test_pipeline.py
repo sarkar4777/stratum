@@ -45,6 +45,9 @@ def test_train_writes_adapter_and_card(two_strata, tiny_base):
         assert card["rank"] == 4
         assert card["load_4bit"] is False
         assert card["num_pairs"] == 8
+        # The audit trail: exact data fingerprint and a build timestamp.
+        assert len(card["skill_sha256"]) == 64
+        assert card["created_utc"]
 
 
 def test_extracted_delta_matches_factors(two_strata):

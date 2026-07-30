@@ -36,14 +36,14 @@ The skinniness of `A` and `B` - how many rows/columns - is the **rank**, `r`. It
 There's a hard limit worth seeing. An adapter can only represent an adjustment as complex as its rank. Ask a rank-4 adapter to learn something needing rank-20 complexity and it gets partway, then **plateaus forever** - not slow, a ceiling. STRATUM's demo shows this with real numbers:
 
 ```
-This skill needs a rank-6 adjustment. Error before training: 1.630
+This skill needs a rank-6 adjustment. Error before: 1.630
 
- adapter rank final error gap closed
-            1 0.9201 43.6% <- stuck
-            2 0.4879 70.1% <- stuck
-            4 0.1299 92.0% <- stuck
-            6 0.0000 100.0%
-           12 0.0000 100.0%
+ adapter rank   final error   gap closed
+            1        0.9201        43.6% <- stuck
+            2        0.4879        70.1% <- stuck
+            4        0.1299        92.0% <- stuck
+            6        0.0000       100.0%
+           12        0.0000       100.0%
 ```
 
 Run it yourself: `python scripts/demo_concepts.py`. **Rule:** rank 16 for style/format strata, 32-64 for knowledge-heavy strata. Using rank 8 for a knowledge skill is the classic mistake - it half-learns and you wrongly blame the method.

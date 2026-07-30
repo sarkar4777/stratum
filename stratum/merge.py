@@ -267,10 +267,13 @@ def merge_strata(strata_dirs: list[str], out_dir: str, method: str = "linear",
     outp.mkdir(parents=True, exist_ok=True)
     model.save_pretrained(str(outp))
     tokenizer.save_pretrained(str(outp))
+    from datetime import datetime, timezone
     summary = {
         "base_model": base_model, "method": method, "weights": weights,
         "strata": [c["stratum_name"] for c in cards],
+        "strata_cards": cards,  # the full provenance of every input, in one place
         "deltas_applied": applied, "deltas_unmatched": missing,
+        "created_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
     }
     if method == "ties":
         summary["density"] = density

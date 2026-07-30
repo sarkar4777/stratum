@@ -29,7 +29,7 @@ Models don't read letters or words. They read **tokens** - chunks of text averag
 ```
 
 The model has a fixed **vocabulary** of tokens it knows (often ~150,000). It emits a score for *every* vocabulary token at each step - that's the "thousands more" above. Two consequences matter later:
-1. Your industry jargon may split into many tokens, hurting efficiency (doc 3 addresses this).
+1. Your industry jargon may split into many tokens, making prompts and outputs longer than they look - worth remembering when you set sequence lengths (doc 6) and read costs.
 2. Everything the model reads or writes is a sequence of these token IDs.
 
 ## Parameters: knowledge stored as numbers

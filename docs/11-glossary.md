@@ -22,6 +22,8 @@
 
 **Data distillation** - The simple flavor: a teacher model generates the training pairs, which then train a normal stratum. Works with any teacher, including closed APIs.
 
+**Logit** - The raw score a model assigns to one vocabulary token before scores are turned into probabilities. "The logits" are the full row of scores, one per token in the vocabulary.
+
 **Logit distillation** - The advanced flavor: teacher and student run together and the student is trained to match the teacher's full softened distribution (soft labels). Needs a shared tokenizer.
 
 **Soft labels** - A teacher's full probability distribution over next tokens (e.g. billing 88%, account 9%, ...), which carries richer information than the single correct answer (the hard label). The signal logit distillation learns from.
@@ -32,6 +34,8 @@
 
 **Teacher / student** - In distillation, the large capable model being imitated (teacher) and the small model being trained (student).
 
+**EOS token (end of sequence)** - The special token a model emits to say "I'm done answering." Training pairs end with it so the fine-tuned model learns to stop.
+
 **Epoch** - One full pass over the training data.
 
 **Fine-tuning** - Further training of a pretrained model to specialize it. Cheap. What STRATUM does.
@@ -40,7 +44,13 @@
 
 **Gradient accumulation** - Summing gradients over several small batches before one update, to get a large effective batch within limited memory.
 
+**Gradient checkpointing** - Recompute some intermediate results during the backward pass instead of storing them all, trading a little compute for a lot of activation memory. On by default in STRATUM training.
+
 **Gradient clipping** - Capping gradient size before an update to prevent instability.
+
+**Greedy decoding** - Generating by always taking the model's top-scoring token, with no randomness. STRATUM evaluates and chats greedily so results repeat run to run.
+
+**Held-out set** - Data set aside before training and never trained on. The only honest thing to evaluate on (doc 8).
 
 **Inference** - Running a trained model to get answers. Much cheaper than training.
 
@@ -80,15 +90,19 @@
 
 **Rank (r)** - The size of a LoRA adapter's small matrices. It controls how complex an adjustment it can represent. Too low and it plateaus. 16 for style, 32-64 for knowledge.
 
-**Recipe** - A YAML file describing a whole STRATUM build (which strata to train, how to fuse). Run with `stratum stack`.
+**Recipe** - A YAML file describing a whole STRATUM build: which strata to train with which settings, how to fuse them, and which eval gates the result must pass. Run with `stratum stack`, checked against your hardware with `stratum plan`.
 
 **SGD (Stochastic Gradient Descent)** - The simplest optimizer: step along the gradient. Crude but foundational.
 
+**SLM (Small Language Model)** - A language model small enough to train and serve on modest hardware, typically under about 10B parameters. What STRATUM builds.
+
 **Singular values** - Numbers describing how strongly a matrix update pushes along each independent direction. Muon flattens them toward 1.
+
+**System prompt** - An instruction message placed before the user's input ("You are a precise assistant for invoice processing.") that steers every answer. Set with `--system` or the recipe's `system` key - and use the SAME one at training and serving time, or behavior shifts.
 
 **Stratum / strata** - STRATUM's word for a skill adapter / adapters. Small, separate, mergeable - the pieces you build from.
 
-**stratum_card.json** - The provenance file saved with each stratum: base model, skill file, settings, final loss. Used to verify merge compatibility and as an audit trail.
+**stratum_card.json** - The provenance file saved with each stratum: base model, skill file and its SHA-256 fingerprint, every setting, final loss, and build time. Used to verify merge compatibility and as an audit trail. The merged model's `stratum_merge.json` carries all input cards forward.
 
 **Token** - A chunk of text (~3/4 word) the model reads and writes in. Models have a fixed vocabulary of tokens.
 

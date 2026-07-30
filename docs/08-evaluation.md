@@ -57,6 +57,8 @@ STRATUM ships three scorers because "correct" means different things per task:
 
 `json_field` compares numbers as numbers: a model answering `"1,499"` against an expected `1499` is right in substance and scores as right. And for thinking models (doc 6), any `<think>` block is stripped before scoring, so you measure the answer, not the reasoning preamble.
 
+Two more things eval does so the number is trustworthy. Generation is **greedy** - the model always takes its top-scoring token, no randomness - so the same model on the same test always scores the same. And the system prompt you pass with `--system` should be the one you trained with (doc 6), or you're measuring a model nobody will deploy.
+
 The principle: your scorer should mark something correct only if it'd be correct in real use. If sloppy answers score well, your number lies. The scorers live in `stratum/evaluate.py` and are short - edit or add your own (numeric tolerance, regex, etc.) for your task.
 
 ## The comparison that proves your work

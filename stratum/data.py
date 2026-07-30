@@ -25,6 +25,20 @@ from pathlib import Path
 import torch
 
 
+def file_sha256(path: str) -> str:
+    """Fingerprint of a data file, recorded in stratum cards.
+
+    An auditor (or you, six months later) can prove which exact data a
+    stratum was trained on by hashing the file again and comparing.
+    """
+    import hashlib
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
 def load_jsonl(path: str, required_keys: tuple[str, ...]) -> list[dict]:
     """Load and validate a JSONL file. Raises with line numbers on bad rows."""
     p = Path(path)

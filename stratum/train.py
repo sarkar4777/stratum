@@ -14,11 +14,12 @@ from __future__ import annotations
 import json
 import random
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 
 import torch
 
-from .data import load_jsonl, make_batches
+from .data import file_sha256, load_jsonl, make_batches
 from .muon import Muon, split_params_for_muon
 
 
@@ -197,9 +198,11 @@ def train_tile(
         "max_len": max_len,
         "load_4bit": bool(load_4bit and "quantization_config" in model_kwargs),
         "skill_file": skill_path,
+        "skill_sha256": file_sha256(skill_path),
         "num_pairs": len(rows),
         "final_loss": final_loss,
         "seed": seed,
+        "created_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "stratum_version": 1,
     }
     (out / "stratum_card.json").write_text(json.dumps(card, indent=2), encoding="utf-8")

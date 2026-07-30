@@ -45,10 +45,10 @@ all skills: W + delta_extract + delta_classify + delta_policy
 That's the entire trick. Every stratum is an additive adjustment to the same `W`, so stacking them is adding them. STRATUM's demo shows the real arithmetic:
 
 ```
-base weight norm: 0.748
-skill-1 delta norm: 0.126
-skill-2 delta norm: 0.112
-merged weight norm: 0.753 <- base + both skills
+base weight norm: 0.746
+skill-1 delta norm: 0.120
+skill-2 delta norm: 0.103
+ weights (1.0, 1.0) -> merged norm 0.760   <- base + both skills
 ```
 
 You built a capable model in pieces, and joining was addition. That's why it fit on a laptop: you never held more than one stratum's training in memory, yet the finished model contains all of them.

@@ -70,9 +70,17 @@ effective_batch = batch_size x grad_accum
 
 STRATUM defaults to `batch_size=4`, `grad_accum=4` -> effective 16. On a tight GPU, drop `batch_size` to 1 and raise `grad_accum` to 16 - same effective batch, less memory.
 
+## Gradient checkpointing
+
+During the backward pass the model normally keeps every intermediate result from the forward pass, which costs a lot of memory on long sequences. **Gradient checkpointing** throws most of them away and recomputes them when needed - a little extra compute for a big activation-memory saving. STRATUM turns it on automatically. It's the reason the activation term in `stratum plan`'s estimate stays small.
+
 ## Gradient clipping
 
 Occasionally a batch produces enormous gradients that would lurch the weights into nonsense. **Clipping** caps the gradient size before the update. STRATUM clips to norm 1.0 every step. This, plus Muon's NaN guard (doc 4), is why STRATUM training is stable even on tiny or messy datasets.
+
+## The system prompt travels with the model
+
+If you train with `--system "You are a precise assistant..."`, that instruction is part of what the model learned to expect. Use the **same** system prompt at eval, chat, and serving time - the recipe's `system` key applies it consistently across training and eval gates for exactly this reason. Changing it in production quietly shifts behavior away from what you measured.
 
 ## Every default, explained
 
@@ -87,7 +95,7 @@ Occasionally a batch produces enormous gradients that would lurch the weights in
 | `--grad-accum` | 4 | Effective batch 16 |
 | `--max-len` | 1024 | Covers most prompt+response pairs, raise for long documents |
 | `--optimizer` | muon | Lighter and fewer steps, `adamw` for the conservative choice |
-| `--seed` | 42 | Reproducibility - same seed, same result |
+| `--seed` | 42 | Same seed = same data order, init, and dropout. GPU math can still differ by a hair between runs and machines - identical *quality*, not always identical bits |
 | 4-bit | on (GPU) | QLoRA, to fit bigger bases, `--no-4bit` to disable |
 
 ## Reading a healthy run

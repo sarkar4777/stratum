@@ -296,12 +296,17 @@ def distill_tile(
     out.mkdir(parents=True, exist_ok=True)
     student.save_pretrained(str(out))
     tokenizer.save_pretrained(str(out))
+    from datetime import datetime, timezone
+    from .data import file_sha256
     (out / "stratum_card.json").write_text(json.dumps({
         "stratum_name": out.name, "base_model": student_model,
         "teacher_model": teacher_model, "rank": rank, "method": "logit_distillation",
         "lr": lr, "epochs": epochs, "batch_size": batch_size,
         "grad_accum": grad_accum, "max_len": max_len,
         "temperature": temperature, "alpha": alpha, "skill_file": skill_path,
-        "num_pairs": len(rows), "seed": seed, "stratum_version": 1,
+        "skill_sha256": file_sha256(skill_path), "num_pairs": len(rows),
+        "seed": seed,
+        "created_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "stratum_version": 1,
     }, indent=2), encoding="utf-8")
     print(f"\nDistilled stratum saved to {out_dir} (base: {student_model})")
