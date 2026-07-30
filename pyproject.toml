@@ -25,7 +25,8 @@ dependencies = [
 [project.optional-dependencies]
 quant = ["bitsandbytes>=0.43"]
 serve = ["vllm>=0.6"]
-dev = ["pytest>=7.0"]
+corpus = ["pypdf>=4.0", "python-docx>=1.0", "python-pptx>=0.6", "openpyxl>=3.1", "pillow>=10.0"]
+dev = ["pytest>=7.0", "pypdf>=4.0", "python-docx>=1.0", "python-pptx>=0.6", "openpyxl>=3.1"]
 
 [project.urls]
 Homepage = "https://github.com/sarkar4777/stratum"

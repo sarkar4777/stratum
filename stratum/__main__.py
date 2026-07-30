@@ -3,6 +3,8 @@ STRATUM command-line interface.
 
     stratum doctor                                   check hardware, recommend size
     stratum plan recipe.yaml                         will this build fit here?
+    stratum corpus ingest --in docs/ --out corpus/   documents and images -> chunks
+    stratum corpus pairs --chunks ... --out ...      chunks -> training pairs
     stratum train --skill S.jsonl --out strata/x     train one stratum
     stratum merge strata/a strata/b --out model      fuse strata into a model
     stratum eval model --test T.jsonl                score a model (or one stratum)
@@ -132,6 +134,35 @@ def cmd_distill(args):
         max_len=args.max_len, temperature=args.temperature, alpha=args.alpha,
         system=args.system, teacher_4bit=args.teacher_4bit, seed=args.seed,
     )
+
+
+def cmd_corpus_ingest(args):
+    from .corpus import ingest
+
+    vision_teacher = None
+    if args.images and args.images != "skip":
+        from .vision import get_vision_teacher
+        vision_teacher = get_vision_teacher(args.images, model=args.vision_model)
+    try:
+        ingest(args.in_dir, args.out, vision_teacher=vision_teacher,
+               redact_pii=args.redact, chunk_size=args.chunk_size,
+               overlap=args.overlap)
+    except (ValueError, FileNotFoundError) as e:
+        sys.exit(str(e))
+
+
+def cmd_corpus_pairs(args):
+    from .corpus import generate_pairs
+    from .teachers import get_teacher
+
+    teacher_fn = get_teacher(args.teacher, model=args.model)
+    try:
+        generate_pairs(args.chunks, args.instruction, teacher_fn,
+                       out_train=args.out, out_test=args.test_out,
+                       per_chunk=args.per_chunk, test_fraction=args.test_fraction,
+                       seed=args.seed)
+    except (ValueError, FileNotFoundError) as e:
+        sys.exit(str(e))
 
 
 def cmd_teacher_gen(args):
@@ -336,6 +367,45 @@ def main():
                     help="load the frozen teacher in 4-bit to fit both models (NVIDIA GPU)")
     di.add_argument("--seed", type=int, default=42)
     di.set_defaults(func=cmd_distill)
+
+    co = sub.add_parser("corpus", help="turn a folder of documents and images into training data")
+    cosub = co.add_subparsers(dest="corpus_cmd", required=True)
+
+    ci = cosub.add_parser("ingest", help="extract, deduplicate, and chunk a corpus folder")
+    ci.add_argument("--in", dest="in_dir", required=True, help="folder of documents and images")
+    ci.add_argument("--out", required=True, help="output folder for chunks.jsonl, manifest, and cache")
+    ci.add_argument("--images", default="skip",
+                    choices=["skip", "hf", "anthropic", "openai", "echo"],
+                    help="vision teacher for image files. hf runs locally - "
+                         "anthropic/openai send every image to that API")
+    ci.add_argument("--vision-model", default=None,
+                    help="vision model id for the chosen backend")
+    ci.add_argument("--redact", action="store_true",
+                    help="baseline scrub of emails, phone and card numbers - "
+                         "not a substitute for your own compliance pipeline")
+    ci.add_argument("--chunk-size", type=int, default=2400,
+                    help="target chunk length in characters")
+    ci.add_argument("--overlap", type=int, default=240,
+                    help="characters shared between neighboring chunks")
+    ci.set_defaults(func=cmd_corpus_ingest)
+
+    cp = cosub.add_parser("pairs", help="have a teacher write grounded Q/A pairs per chunk")
+    cp.add_argument("--chunks", required=True, help="chunks.jsonl from corpus ingest")
+    cp.add_argument("--instruction", required=True,
+                    help="what kind of pairs to write, one line - e.g. "
+                         "'Write questions a field engineer would ask.'")
+    cp.add_argument("--out", required=True, help="training JSONL (re-run to resume)")
+    cp.add_argument("--test-out", default=None,
+                    help="held-out test JSONL - required when --test-fraction > 0")
+    cp.add_argument("--teacher", default="hf", choices=["hf", "openai", "anthropic", "echo"],
+                    help="teacher backend. Note: openai/anthropic send every chunk "
+                         "to that API - use hf (local) for data that must not leave")
+    cp.add_argument("--model", default=None, help="teacher model id for the chosen backend")
+    cp.add_argument("--per-chunk", type=int, default=3, help="pairs to request per chunk")
+    cp.add_argument("--test-fraction", type=float, default=0.1,
+                    help="fraction of CHUNKS whose pairs go to the test set")
+    cp.add_argument("--seed", type=int, default=42, help="makes the train/test split stable")
+    cp.set_defaults(func=cmd_corpus_pairs)
 
     tg = sub.add_parser("teacher-gen", help="data distillation: a teacher writes training pairs from seed inputs")
     tg.add_argument("--seeds", required=True, help="text file, one seed input per line")
