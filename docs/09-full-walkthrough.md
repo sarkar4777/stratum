@@ -16,7 +16,7 @@ You'll watch Muon flatten an update, an adapter hit its rank ceiling, and two st
 ## Step 1 - install and check hardware
 
 ```bash
-git clone https://github.com/YOUR-USERNAME/stratum.git
+git clone https://github.com/sarkar4777/stratum.git
 cd stratum
 pip install -e .
 pip install bitsandbytes # for 4-bit / QLoRA, if you have an NVIDIA GPU

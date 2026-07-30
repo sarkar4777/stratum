@@ -73,7 +73,7 @@ def format_messages(tokenizer, messages: list[dict], add_generation_prompt: bool
     """Render a message list with the tokenizer's chat template.
 
     Thinking is disabled (enable_thinking=False) so models like Qwen3 answer
-    directly; templates that don't know the flag simply ignore it. Falls back
+    directly, and templates that don't know the flag simply ignore it. Falls back
     to a plain format if the tokenizer has no chat template.
     """
     try:

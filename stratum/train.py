@@ -90,7 +90,7 @@ def train_tile(
             )
             print("Loading base in 4-bit (QLoRA).")
         except Exception as e:
-            print(f"4-bit unavailable ({e}); loading in bf16 (needs more VRAM).")
+            print(f"4-bit unavailable ({e}) - loading in bf16 (needs more VRAM).")
 
     model = AutoModelForCausalLM.from_pretrained(base_model, **model_kwargs)
 
@@ -117,6 +117,9 @@ def train_tile(
     if hasattr(model, "gradient_checkpointing_enable"):
         model.gradient_checkpointing_enable()
         model.enable_input_require_grads()
+        # The generation cache is useless during training and fights with
+        # checkpointing. Turning it off silences the warning and saves memory.
+        model.config.use_cache = False
 
     # Build optimizer(s).
     if optimizer == "muon":
@@ -187,14 +190,19 @@ def train_tile(
         "rank": rank,
         "lora_alpha": lora_alpha,
         "optimizer": optimizer,
+        "lr": lr if optimizer == "muon" else adamw_lr,
         "epochs": epochs,
+        "batch_size": batch_size,
+        "grad_accum": grad_accum,
+        "max_len": max_len,
+        "load_4bit": bool(load_4bit and "quantization_config" in model_kwargs),
         "skill_file": skill_path,
         "num_pairs": len(rows),
         "final_loss": final_loss,
         "seed": seed,
         "stratum_version": 1,
     }
-    (out / "stratum_card.json").write_text(json.dumps(card, indent=2))
+    (out / "stratum_card.json").write_text(json.dumps(card, indent=2), encoding="utf-8")
     print(f"\nStratum saved to {out_dir}")
     print(f" base: {base_model} rank: {rank} final loss: {final_loss:.4f}")
     return final_loss

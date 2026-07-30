@@ -67,10 +67,15 @@ def _hf_teacher(model_name: str):
         tokenizer.pad_token = tokenizer.eos_token
 
     def teacher(prompt: str) -> str:
+        from .data import strip_think
         messages = [{"role": "user", "content": prompt}]
         try:
+            # enable_thinking=False keeps thinking models (Qwen3) from writing
+            # reasoning blocks into your training data. Templates that don't
+            # know the flag ignore it.
             text = tokenizer.apply_chat_template(messages, tokenize=False,
-                                                 add_generation_prompt=True)
+                                                 add_generation_prompt=True,
+                                                 enable_thinking=False)
         except Exception:
             text = prompt
         ids = tokenizer(text, return_tensors="pt", add_special_tokens=False).to(device)
@@ -78,7 +83,9 @@ def _hf_teacher(model_name: str):
             out = model.generate(**ids, max_new_tokens=512, do_sample=False,
                                  temperature=None, top_p=None,
                                  pad_token_id=tokenizer.pad_token_id or tokenizer.eos_token_id)
-        return tokenizer.decode(out[0][ids["input_ids"].shape[1]:], skip_special_tokens=True)
+        raw = tokenizer.decode(out[0][ids["input_ids"].shape[1]:], skip_special_tokens=True)
+        # Belt and braces - some checkpoints think even when asked not to.
+        return strip_think(raw)
 
     return teacher
 

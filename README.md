@@ -43,7 +43,7 @@ STRATUM rests on a few techniques. Understand these and you understand the proje
 
 ```bash
 # install
-git clone https://github.com/YOUR-USERNAME/stratum.git && cd stratum
+git clone https://github.com/sarkar4777/stratum.git && cd stratum
 pip install -e .
 pip install bitsandbytes # for 4-bit / QLoRA on NVIDIA GPUs
 

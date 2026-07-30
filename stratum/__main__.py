@@ -1,19 +1,20 @@
 """
 STRATUM command-line interface.
 
-    stratum doctor check hardware, recommend size
-    stratum train --skill S.jsonl --out strata/x train one stratum
-    stratum merge strata/a strata/b --out model fuse strata into a model
-    stratum eval model --test T.jsonl score a model
-    stratum chat model talk to a model
-    stratum stack recipe.yaml run a whole build from a recipe
+    stratum doctor                                   check hardware, recommend size
+    stratum train --skill S.jsonl --out strata/x     train one stratum
+    stratum merge strata/a strata/b --out model      fuse strata into a model
+    stratum eval model --test T.jsonl                score a model (or one stratum)
+    stratum chat model                               talk to a model
+    stratum distill ...                              student imitates a teacher
+    stratum teacher-gen ...                          teacher writes training pairs
+    stratum stack recipe.yaml                        run a whole build from a recipe
 
 Run `stratum <command> -h` for per-command options.
 """
 from __future__ import annotations
 
 import argparse
-import json
 import sys
 from pathlib import Path
 
@@ -29,16 +30,16 @@ def cmd_doctor(args):
         if vram >= 40:
             rec = "Qwen3-8B comfortably, or 4B in full precision."
         elif vram >= 24:
-            rec = "Qwen3-4B comfortably; 8B with 4-bit."
+            rec = "Qwen3-4B comfortably, 8B with 4-bit."
         elif vram >= 12:
-            rec = "Qwen3-4B with 4-bit; 1.7B in bf16."
+            rec = "Qwen3-4B with 4-bit, 1.7B in bf16."
         elif vram >= 8:
-            rec = "Qwen3-1.7B; or 4B with 4-bit + short sequences."
+            rec = "Qwen3-1.7B, or 4B with 4-bit + short sequences."
         else:
-            rec = "Qwen3-0.6B in bf16; 1.7B with 4-bit."
+            rec = "Qwen3-0.6B in bf16, 1.7B with 4-bit."
         print(f"\nRecommended base: {rec}")
         try:
-            import bitsandbytes # noqa
+            import bitsandbytes  # noqa
             print("4-bit (QLoRA): available.")
         except Exception:
             print("4-bit (QLoRA): NOT installed. `pip install bitsandbytes` to fit bigger models.")
@@ -55,124 +56,87 @@ def cmd_train(args):
     from .train import train_tile
     train_tile(
         skill_path=args.skill, out_dir=args.out, base_model=args.base,
-        rank=args.rank, lr=args.lr, epochs=args.epochs, batch_size=args.batch_size,
-        grad_accum=args.grad_accum, max_len=args.max_len, optimizer=args.optimizer,
+        rank=args.rank, lr=args.lr, adamw_lr=args.adamw_lr, epochs=args.epochs,
+        batch_size=args.batch_size, grad_accum=args.grad_accum,
+        max_len=args.max_len, optimizer=args.optimizer,
         system=args.system, load_4bit=not args.no_4bit, seed=args.seed,
     )
 
 
 def cmd_merge(args):
-    _do_merge(args.strata, args.out, args.method, args.weights, args.density, args.drop)
-
-
-def _do_merge(strata, out_dir, method, weights, density, drop):
-    import torch
-    from transformers import AutoModelForCausalLM, AutoTokenizer
-    from .merge import extract_deltas, merge as merge_deltas
-
-    # Verify common base.
-    cards = []
-    for s in strata:
-        card_path = Path(s) / "stratum_card.json"
-        if not card_path.exists():
-            sys.exit(f"{s} has no stratum_card.json - is it a STRATUM stratum?")
-        cards.append(json.loads(card_path.read_text()))
-    bases = {c["base_model"] for c in cards}
-    if len(bases) != 1:
-        sys.exit(f"Strata have different base models: {bases}. "
-                 f"Only strata from the same base can be merged.")
-    base_model = bases.pop()
-
-    if weights is None:
-        weights = [1.0] * len(strata)
-    if len(weights) != len(strata):
-        sys.exit("Number of --weights must match number of strata.")
-
-    print(f"Merging {len(strata)} strata from {base_model}")
-    print(f" method={method} weights={weights}")
-
-    deltas = [extract_deltas(s) for s in strata]
-    kw = {}
-    if method == "ties":
-        kw["density"] = density
-    if method == "dare":
-        kw["drop"] = drop
-    merged = merge_deltas(method, deltas, weights, **kw)
-
-    # Apply onto a fresh base and save a standalone model.
-    tokenizer = AutoTokenizer.from_pretrained(base_model)
-    model = AutoModelForCausalLM.from_pretrained(base_model, torch_dtype=torch.bfloat16)
-    sd = model.state_dict()
-    applied, missing = 0, 0
-    for name, delta in merged.items():
-        if name in sd:
-            sd[name] = sd[name] + delta.to(sd[name].dtype)
-            applied += 1
-        else:
-            missing += 1
-    model.load_state_dict(sd)
-
-    outp = Path(out_dir)
-    outp.mkdir(parents=True, exist_ok=True)
-    model.save_pretrained(str(outp))
-    tokenizer.save_pretrained(str(outp))
-    (outp / "stratum_merge.json").write_text(json.dumps({
-        "base_model": base_model, "method": method, "weights": weights,
-        "strata": [c["stratum_name"] for c in cards], "deltas_applied": applied,
-    }, indent=2))
-    print(f"Applied {applied} weight deltas ({missing} unmatched). Model -> {out_dir}")
+    from .merge import merge_strata
+    try:
+        merge_strata(args.strata, args.out, method=args.method,
+                     weights=args.weights, density=args.density,
+                     drop=args.drop, seed=args.seed)
+    except (ValueError, FileNotFoundError) as e:
+        sys.exit(str(e))
 
 
 def cmd_eval(args):
     from .evaluate import run_eval
-    run_eval(args.model, args.test, scorer=args.scorer, system=args.system)
+    report = run_eval(args.model, args.test, scorer=args.scorer,
+                      system=args.system, json_out=args.json_out,
+                      baseline=args.baseline)
+    if args.min_score is not None and report["mean"] < args.min_score:
+        sys.exit(f"FAIL: score {report['mean']:.1%} is below --min-score "
+                 f"{args.min_score:.1%}.")
 
 
 def cmd_chat(args):
     import torch
-    from transformers import AutoModelForCausalLM, AutoTokenizer
-    from .data import format_chat
+    from .data import format_messages, strip_think
+    from .hf_utils import load_for_inference
 
-    tokenizer = AutoTokenizer.from_pretrained(args.model)
-    model = AutoModelForCausalLM.from_pretrained(args.model, torch_dtype=torch.bfloat16)
+    model, tokenizer = load_for_inference(args.model)
     device = "cuda" if torch.cuda.is_available() else "cpu"
     model.to(device).eval()
+
+    # The conversation so far. Each turn is fed back in, so the model sees
+    # its own history - without this, "chat" would be amnesiac one-shots.
+    messages = []
+    if args.system:
+        messages.append({"role": "system", "content": args.system})
+
     print("Chat with your STRATUM model. Ctrl-C to quit.\n")
     try:
         while True:
             q = input("you: ").strip()
             if not q:
                 continue
-            text = format_chat(tokenizer, q, response=None, system=args.system)
+            messages.append({"role": "user", "content": q})
+            text = format_messages(tokenizer, messages, add_generation_prompt=True)
             ids = tokenizer(text, return_tensors="pt", add_special_tokens=False).to(device)
             with torch.no_grad():
                 out = model.generate(**ids, max_new_tokens=400, do_sample=False,
                                      temperature=None, top_p=None,
                                      pad_token_id=tokenizer.pad_token_id or tokenizer.eos_token_id)
-            print("stratum:", tokenizer.decode(
-                out[0][ids["input_ids"].shape[1]:], skip_special_tokens=True), "\n")
+            answer = strip_think(tokenizer.decode(
+                out[0][ids["input_ids"].shape[1]:], skip_special_tokens=True))
+            messages.append({"role": "assistant", "content": answer})
+            print("stratum:", answer, "\n")
     except (KeyboardInterrupt, EOFError):
         print("\nbye")
 
 
 def cmd_distill(args):
-    """Train a student stratum by logit-distilling from a teacher model."""
     from .distill import distill_tile
     distill_tile(
         skill_path=args.skill, out_dir=args.out,
         student_model=args.student, teacher_model=args.teacher,
-        rank=args.rank, epochs=args.epochs, batch_size=args.batch_size,
+        rank=args.rank, lr=args.lr, epochs=args.epochs,
+        batch_size=args.batch_size, grad_accum=args.grad_accum,
         max_len=args.max_len, temperature=args.temperature, alpha=args.alpha,
-        system=args.system, seed=args.seed,
+        system=args.system, teacher_4bit=args.teacher_4bit, seed=args.seed,
     )
 
 
 def cmd_teacher_gen(args):
-    """Data distillation: have a teacher WRITE training pairs from seed inputs."""
     from .distill import generate_dataset_from_teacher
     from .teachers import get_teacher
 
-    seeds = [l.strip() for l in Path(args.seeds).read_text().splitlines() if l.strip()]
+    seeds = [l.strip() for l in
+             Path(args.seeds).read_text(encoding="utf-8").splitlines() if l.strip()]
     print(f"Loaded {len(seeds)} seed inputs from {args.seeds}")
     teacher_fn = get_teacher(args.teacher, model=args.model)
     generate_dataset_from_teacher(seeds, args.instruction, teacher_fn, args.out)
@@ -180,41 +144,63 @@ def cmd_teacher_gen(args):
 
 def cmd_stack(args):
     """Run a whole build from a YAML recipe: train listed strata, then merge them."""
-    import yaml
-    from .train import train_tile
+    from .recipe import load_recipe, stratum_setting
+    from .merge import merge_strata
 
-    recipe = yaml.safe_load(Path(args.recipe).read_text())
+    try:
+        recipe = load_recipe(args.recipe)
+    except (ValueError, FileNotFoundError) as e:
+        sys.exit(str(e))
+
     base = recipe["base_model"]
     strata_dirs = []
     for st in recipe["strata"]:
         out = st["out"]
+        common = dict(
+            rank=st.get("rank", 16),
+            epochs=st.get("epochs", 3),
+            lr=stratum_setting(recipe, st, "lr", 2e-2),
+            batch_size=stratum_setting(recipe, st, "batch_size", 4),
+            max_len=stratum_setting(recipe, st, "max_len", 1024),
+            system=stratum_setting(recipe, st, "system", None),
+            seed=stratum_setting(recipe, st, "seed", 42),
+        )
         if "distill" in st:
-            # This stratum is distilled from a teacher.
             from .distill import distill_tile
             dcfg = st["distill"]
             print(f"\n=== Distilling stratum: {st['name']} (teacher {dcfg['teacher']}) ===")
             distill_tile(
                 skill_path=st["skill"], out_dir=out,
                 student_model=base, teacher_model=dcfg["teacher"],
-                rank=st.get("rank", 16), epochs=st.get("epochs", 3),
-                temperature=dcfg.get("temperature", 2.0), alpha=dcfg.get("alpha", 0.5),
-                system=recipe.get("system"),
+                temperature=dcfg.get("temperature", 2.0),
+                alpha=dcfg.get("alpha", 0.5),
+                teacher_4bit=dcfg.get("teacher_4bit", False),
+                grad_accum=stratum_setting(recipe, st, "grad_accum", 4),
+                **{**common, "batch_size": dcfg.get("batch_size",
+                                                    common["batch_size"])},
             )
         else:
+            from .train import train_tile
             print(f"\n=== Training stratum: {st['name']} ===")
             train_tile(
                 skill_path=st["skill"], out_dir=out, base_model=base,
-                rank=st.get("rank", 16), epochs=st.get("epochs", 3),
-                optimizer=recipe.get("optimizer", "muon"),
-                system=recipe.get("system"),
-                load_4bit=recipe.get("load_4bit", True),
+                optimizer=stratum_setting(recipe, st, "optimizer", "muon"),
+                adamw_lr=stratum_setting(recipe, st, "adamw_lr", 1e-3),
+                grad_accum=stratum_setting(recipe, st, "grad_accum", 4),
+                load_4bit=stratum_setting(recipe, st, "load_4bit", True),
+                **common,
             )
         strata_dirs.append(out)
 
     m = recipe.get("merge", {})
     print("\n=== Merging strata ===")
-    _do_merge(strata_dirs, recipe["output_model"], m.get("method", "linear"),
-              m.get("weights"), m.get("density", 0.2), m.get("drop", 0.9))
+    try:
+        merge_strata(strata_dirs, recipe["output_model"],
+                     method=m.get("method", "linear"), weights=m.get("weights"),
+                     density=m.get("density", 0.2), drop=m.get("drop", 0.9),
+                     seed=m.get("seed", 42))
+    except (ValueError, FileNotFoundError) as e:
+        sys.exit(str(e))
     print(f"\nBuild complete -> {recipe['output_model']}")
 
 
@@ -232,6 +218,8 @@ def main():
     t.add_argument("--base", default="Qwen/Qwen3-1.7B")
     t.add_argument("--rank", type=int, default=16)
     t.add_argument("--lr", type=float, default=2e-2, help="Muon learning rate")
+    t.add_argument("--adamw-lr", type=float, default=1e-3,
+                   help="learning rate for the AdamW side (non-matrix params, or everything with --optimizer adamw)")
     t.add_argument("--epochs", type=int, default=3)
     t.add_argument("--batch-size", type=int, default=4)
     t.add_argument("--grad-accum", type=int, default=4)
@@ -249,13 +237,21 @@ def main():
     m.add_argument("--weights", nargs="+", type=float)
     m.add_argument("--density", type=float, default=0.2, help="TIES: fraction kept")
     m.add_argument("--drop", type=float, default=0.9, help="DARE: fraction dropped")
+    m.add_argument("--seed", type=int, default=42,
+                   help="makes DARE's random dropping reproducible")
     m.set_defaults(func=cmd_merge)
 
-    e = sub.add_parser("eval", help="score a model on a test set")
+    e = sub.add_parser("eval", help="score a model (or a single stratum) on a test set")
     e.add_argument("model")
     e.add_argument("--test", required=True)
     e.add_argument("--scorer", choices=["contains", "exact", "json_field"], default="contains")
     e.add_argument("--system", default=None)
+    e.add_argument("--json-out", default=None,
+                   help="write the full report as JSON here (for CI)")
+    e.add_argument("--min-score", type=float, default=None,
+                   help="exit non-zero if the mean score is below this (for CI gating)")
+    e.add_argument("--baseline", default=None,
+                   help="also score this model (usually the base) for comparison")
     e.set_defaults(func=cmd_eval)
 
     c = sub.add_parser("chat", help="talk to a model")
@@ -269,19 +265,23 @@ def main():
     di.add_argument("--student", default="Qwen/Qwen3-1.7B", help="small model that learns")
     di.add_argument("--teacher", default="Qwen/Qwen3-4B", help="big model to imitate (must share tokenizer)")
     di.add_argument("--rank", type=int, default=16)
+    di.add_argument("--lr", type=float, default=2e-2, help="Muon learning rate")
     di.add_argument("--epochs", type=int, default=3)
     di.add_argument("--batch-size", type=int, default=2)
+    di.add_argument("--grad-accum", type=int, default=4)
     di.add_argument("--max-len", type=int, default=1024)
     di.add_argument("--temperature", type=float, default=2.0, help="soften distributions")
     di.add_argument("--alpha", type=float, default=0.5, help="soft vs hard loss weight")
     di.add_argument("--system", default=None)
+    di.add_argument("--teacher-4bit", action="store_true",
+                    help="load the frozen teacher in 4-bit to fit both models (NVIDIA GPU)")
     di.add_argument("--seed", type=int, default=42)
     di.set_defaults(func=cmd_distill)
 
     tg = sub.add_parser("teacher-gen", help="data distillation: a teacher writes training pairs from seed inputs")
     tg.add_argument("--seeds", required=True, help="text file, one seed input per line")
     tg.add_argument("--instruction", required=True, help="what the skill should do, one line")
-    tg.add_argument("--out", required=True, help="output training JSONL")
+    tg.add_argument("--out", required=True, help="output training JSONL (re-run to resume)")
     tg.add_argument("--teacher", default="hf", choices=["hf", "openai", "anthropic", "echo"],
                     help="teacher backend")
     tg.add_argument("--model", default=None, help="teacher model name/id for the chosen backend")

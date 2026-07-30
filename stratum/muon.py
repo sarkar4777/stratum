@@ -8,10 +8,10 @@ typically reaches good quality in fewer steps.
 
 Scope: Muon applies ONLY to 2D matrices. The Trainer routes non-2D parameters
 (embeddings, biases, layernorm gains, and the LoRA input projections in some
-setups) to a small AdamW. This module provides Muon; stratum/train.py wires the
+setups) to a small AdamW. This module provides Muon, and stratum/train.py wires the
 split via `split_params_for_muon`.
 
-References: Keller Jordan's Muon; Bernstein et al. on orthogonalized updates.
+References: Keller Jordan's Muon (2024), and Bernstein et al. on orthogonalized updates.
 This implementation favors clarity and numerical safety for laptop-scale
 adapter training.
 """
@@ -26,7 +26,7 @@ def newton_schulz(G: torch.Tensor, steps: int = 5, eps: float = 1e-7) -> torch.T
     """Approximately orthogonalize a 2D matrix G (push singular values toward 1).
 
     Uses the quintic Newton-Schulz iteration. We deliberately never compute the
-    SVD (too slow); this achieves the same flattening with a few matmuls.
+    SVD (too slow) - this achieves the same flattening with a few matmuls.
 
     Runs the iteration in bfloat16 for speed but is numerically safe because we
     normalize G first. Returns a tensor in G's original dtype.
@@ -62,7 +62,7 @@ class Muon(Optimizer):
 
     Args:
         params: iterable of 2D parameters only (Trainer filters these).
-        lr: learning rate. Muon tolerates larger LRs than AdamW; 2e-2 is typical.
+        lr: learning rate. Muon tolerates larger LRs than AdamW, and 2e-2 is typical.
         momentum: momentum coefficient (the single state Muon keeps).
         nesterov: use Nesterov-style lookahead (recommended).
         ns_steps: Newton-Schulz iterations per step (5 is standard).

@@ -15,7 +15,7 @@ Methods (see docs/05-merging.md):
   ties   : trim to top-magnitude entries, resolve sign conflicts by vote.
   dare   : randomly drop redundant entries and rescale, reducing crosstalk.
 
-All strata being merged MUST share the same base model; merge_strata verifies
+All strata being merged MUST share the same base model. merge_strata verifies
 this from each stratum's stratum_card.json before touching any weights.
 
 Memory note: a dense delta is the full size of its base weight, so holding
@@ -75,7 +75,7 @@ def load_stratum_factors(stratum_dir: str) -> dict[str, tuple[torch.Tensor, torc
     r = cfg.get("r", 16)
     alpha = cfg.get("lora_alpha", r)
     use_rslora = cfg.get("use_rslora", False)
-    # rsLoRA scales by alpha/sqrt(r); classic LoRA by alpha/r.
+    # rsLoRA scales by alpha/sqrt(r), classic LoRA by alpha/r.
     scaling = (alpha / (r ** 0.5)) if use_rslora else (alpha / r)
 
     # Find every module that has a lora_A (its lora_B pairs by shared prefix).
@@ -128,7 +128,7 @@ def merge_key(method: str, tensors: list[torch.Tensor], weights: list[float],
               density: float = 0.2, drop: float = 0.9,
               generator: torch.Generator | None = None) -> torch.Tensor:
     """Merge the dense deltas for ONE weight across strata. The per-key core
-    every method reduces to; merge_strata calls this one weight at a time."""
+    every method reduces to. merge_strata calls this one weight at a time."""
     if method == "linear":
         acc = None
         for t, w in zip(tensors, weights):
@@ -166,7 +166,7 @@ def merge(method: str, deltas_per_stratum, weights=None, density: float = 0.2,
           drop: float = 0.9, seed: int | None = None):
     """Merge dicts of dense deltas. weights default to equal (they need not sum to 1).
 
-    seed makes DARE's random dropping reproducible; linear and ties are
+    seed makes DARE's random dropping reproducible. linear and ties are
     deterministic anyway.
     """
     if not deltas_per_stratum:
@@ -236,7 +236,7 @@ def merge_strata(strata_dirs: list[str], out_dir: str, method: str = "linear",
     if any(c.get("load_4bit") for c in cards):
         print(" note: some strata were trained against a 4-bit base (QLoRA) but are\n"
               " merged onto the full-precision base. The small mismatch usually\n"
-              " costs little; if eval drops, retrain those strata with --no-4bit.\n"
+              " costs little. If eval drops, retrain those strata with --no-4bit.\n"
               " See docs/05-merging.md.")
 
     factors = [load_stratum_factors(s) for s in strata_dirs]

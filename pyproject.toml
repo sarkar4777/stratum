@@ -28,8 +28,9 @@ serve = ["vllm>=0.6"]
 dev = ["pytest>=7.0"]
 
 [project.urls]
-Homepage = "https://github.com/YOUR-USERNAME/stratum"
-Documentation = "https://github.com/YOUR-USERNAME/stratum/tree/main/docs"
+Homepage = "https://github.com/sarkar4777/stratum"
+Documentation = "https://github.com/sarkar4777/stratum/tree/main/docs"
+Issues = "https://github.com/sarkar4777/stratum/issues"
 
 [project.scripts]
 stratum = "stratum.__main__:main"

@@ -57,6 +57,51 @@ def check_hf_ready(verbose: bool = True) -> dict:
     return status
 
 
+def load_for_inference(model_dir: str):
+    """Load a model directory for generation, whatever kind it is.
+
+    Two kinds of directory come out of STRATUM:
+      - a merged model (from `stratum merge`): a full standalone model
+      - a single stratum (from `stratum train`): just an adapter, which needs
+        its base model loaded first and the adapter attached on top
+
+    This detects which one it got, so `stratum eval` and `stratum chat` work
+    on both - you can score a stratum on its own before ever merging it.
+    Returns (model, tokenizer).
+    """
+    import json
+    import torch
+    from pathlib import Path
+    from transformers import AutoModelForCausalLM, AutoTokenizer
+
+    path = Path(model_dir)
+    adapter_cfg = path / "adapter_config.json"
+    if adapter_cfg.exists():
+        # A stratum. Find its base from the card (preferred - it is STRATUM's
+        # provenance record) or from what PEFT wrote in the adapter config.
+        base = None
+        card_path = path / "stratum_card.json"
+        if card_path.exists():
+            base = json.loads(card_path.read_text(encoding="utf-8")).get("base_model")
+        if not base:
+            base = json.loads(adapter_cfg.read_text(encoding="utf-8")).get(
+                "base_model_name_or_path")
+        if not base:
+            raise ValueError(
+                f"{model_dir} is an adapter but neither stratum_card.json nor "
+                f"adapter_config.json names its base model."
+            )
+        print(f"{model_dir} is a single stratum - loading base {base} and attaching it.")
+        from peft import PeftModel
+        tokenizer = AutoTokenizer.from_pretrained(model_dir)
+        model = AutoModelForCausalLM.from_pretrained(base, torch_dtype=torch.bfloat16)
+        model = PeftModel.from_pretrained(model, model_dir)
+    else:
+        tokenizer = AutoTokenizer.from_pretrained(model_dir)
+        model = AutoModelForCausalLM.from_pretrained(model_dir, torch_dtype=torch.bfloat16)
+    return model, tokenizer
+
+
 def resolve_model_hint(model_name: str) -> str:
     """Return a friendly hint if a model id looks like a common mistake."""
     if "/" not in model_name and not os.path.isdir(model_name):

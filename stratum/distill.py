@@ -11,7 +11,7 @@ STRATUM supports two flavors, from simplest to most powerful:
      Use a big teacher (a frontier API model, or a large local model) to GENERATE
      the training pairs, then train a normal stratum on them with train.py.
      Simple, robust, and the teacher can even be a closed API. See
-     generate_dataset_from_teacher() below and docs/05-distillation.md.
+     generate_dataset_from_teacher() below and docs/07-distillation.md.
 
   2. LOGIT distillation (online, advanced)
      Run teacher and student on the same text at once and train the student to
@@ -27,6 +27,7 @@ capable local teacher and want to squeeze out the last bit of quality.
 from __future__ import annotations
 
 import json
+import time
 from pathlib import Path
 
 import torch
@@ -55,8 +56,16 @@ def generate_dataset_from_teacher(
     task_instruction: str,
     teacher_fn,
     out_path: str,
+    retries: int = 3,
 ) -> str:
     """Generate a training JSONL by asking a teacher for each seed input.
+
+    Built to survive long runs against flaky APIs:
+      - each pair is APPENDED to out_path as soon as it exists, so a crash at
+        seed 4,999 of 5,000 loses one pair, not the run
+      - a failed teacher call is retried with growing pauses before giving up
+      - re-running with the same out_path RESUMES - seeds already answered in
+        the file are skipped
 
     Args:
         seed_inputs: the concrete inputs (documents, tickets, questions...).
@@ -65,24 +74,59 @@ def generate_dataset_from_teacher(
             teacher: an OpenAI/Anthropic API call, a local big model, anything.
             STRATUM stays vendor-neutral by taking this function from you.
         out_path: where to write the resulting {"prompt","response"} JSONL.
+        retries: attempts per seed before skipping it (with a warning).
 
-    Returns out_path. See docs/05-distillation.md for a ready teacher_fn.
+    Returns out_path. See docs/07-distillation.md for the full walkthrough.
     """
-    rows = []
-    for i, seed in enumerate(seed_inputs, 1):
-        prompt_to_teacher = build_teacher_prompt(task_instruction, seed)
-        response = teacher_fn(prompt_to_teacher).strip()
-        # The STUDENT will be trained on the clean task prompt -> teacher answer.
-        student_prompt = f"{task_instruction}\n\nInput:\n{seed}"
-        rows.append({"prompt": student_prompt, "response": response})
-        if i % 10 == 0:
-            print(f" generated {i}/{len(seed_inputs)} pairs")
+    outp = Path(out_path)
+    outp.parent.mkdir(parents=True, exist_ok=True)
 
-    Path(out_path).parent.mkdir(parents=True, exist_ok=True)
-    with open(out_path, "w") as f:
-        for r in rows:
-            f.write(json.dumps(r) + "\n")
-    print(f"Wrote {len(rows)} distilled pairs to {out_path}")
+    # Resume support - collect the student prompts already answered.
+    done = set()
+    if outp.exists():
+        for line in outp.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if line:
+                done.add(json.loads(line)["prompt"])
+        if done:
+            print(f"Resuming: {len(done)} pairs already in {out_path}")
+
+    written = len(done)
+    failed = []
+    with open(outp, "a", encoding="utf-8") as f:
+        for i, seed in enumerate(seed_inputs, 1):
+            # The STUDENT will be trained on the clean task prompt.
+            student_prompt = f"{task_instruction}\n\nInput:\n{seed}"
+            if student_prompt in done:
+                continue
+
+            prompt_to_teacher = build_teacher_prompt(task_instruction, seed)
+            response = None
+            for attempt in range(retries):
+                try:
+                    response = teacher_fn(prompt_to_teacher).strip()
+                    break
+                except Exception as e:
+                    wait = 2 ** attempt
+                    print(f" seed {i}: teacher call failed ({e}), "
+                          f"retrying in {wait}s ({attempt + 1}/{retries})")
+                    time.sleep(wait)
+            if response is None:
+                failed.append(seed)
+                continue
+
+            f.write(json.dumps({"prompt": student_prompt, "response": response},
+                               ensure_ascii=False) + "\n")
+            f.flush()
+            written += 1
+            if written % 10 == 0:
+                print(f" generated {written}/{len(seed_inputs)} pairs")
+
+    if failed:
+        print(f"WARNING: {len(failed)} seeds failed after {retries} tries each. "
+              f"Re-run the same command to retry just those - existing pairs "
+              f"are kept.")
+    print(f"Wrote {written} distilled pairs to {out_path}")
     return out_path
 
 
@@ -112,11 +156,11 @@ def distillation_loss(student_logits, teacher_logits, labels,
 
     mask = (lab != -100)
     if mask.sum() == 0:
-        return student_logits.sum() * 0.0 # nothing to learn from
+        return student_logits.sum() * 0.0  # nothing to learn from
 
-    s = s[mask] # [N, vocab]
-    t = t[mask] # [N, vocab]
-    lab = lab[mask] # [N]
+    s = s[mask]    # [N, vocab]
+    t = t[mask]    # [N, vocab]
+    lab = lab[mask]  # [N]
 
     # Soft loss: KL( teacher || student ), both softened by temperature.
     T = temperature
@@ -124,7 +168,7 @@ def distillation_loss(student_logits, teacher_logits, labels,
         F.log_softmax(s / T, dim=-1),
         F.softmax(t / T, dim=-1),
         reduction="batchmean",
-    ) * (T * T) # scale restores gradient magnitude
+    ) * (T * T)  # scale restores gradient magnitude
 
     # Hard loss: standard cross-entropy against the real tokens.
     hard = F.cross_entropy(s, lab)
@@ -141,18 +185,21 @@ def distill_tile(
     lr: float = 2e-2,
     epochs: int = 3,
     batch_size: int = 2,
+    grad_accum: int = 4,
     max_len: int = 1024,
     temperature: float = 2.0,
     alpha: float = 0.5,
     system: str | None = None,
+    teacher_4bit: bool = False,
     seed: int = 42,
 ):
     """Train a student stratum to imitate a teacher via logit distillation.
 
     Requires teacher and student to SHARE A TOKENIZER (same model family, e.g.
-    both Qwen3). The teacher runs frozen in eval mode; only the student's LoRA
-    adapter trains. Both models must fit in memory together - use a small
-    student and a mid-size teacher, or prefer data distillation above.
+    both Qwen3). The teacher runs frozen in eval mode and only the student's
+    LoRA adapter trains. Both models must fit in memory together - pass
+    teacher_4bit=True to quantize the frozen teacher on an NVIDIA GPU, use a
+    smaller teacher, or prefer data distillation above.
     """
     from transformers import AutoModelForCausalLM, AutoTokenizer
     from peft import LoraConfig, get_peft_model
@@ -172,9 +219,22 @@ def distill_tile(
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
-    # Teacher: frozen, eval mode.
-    teacher = AutoModelForCausalLM.from_pretrained(teacher_model, torch_dtype=torch.bfloat16)
-    teacher.to(device).eval()
+    # Teacher: frozen, eval mode. Optionally 4-bit - it is only read, so
+    # quantizing it is nearly free and roughly quarters its memory.
+    teacher_kwargs = dict(torch_dtype=torch.bfloat16)
+    if teacher_4bit and torch.cuda.is_available():
+        try:
+            from transformers import BitsAndBytesConfig
+            teacher_kwargs["quantization_config"] = BitsAndBytesConfig(
+                load_in_4bit=True, bnb_4bit_compute_dtype=torch.bfloat16,
+                bnb_4bit_quant_type="nf4", bnb_4bit_use_double_quant=True)
+            print("Loading teacher in 4-bit.")
+        except Exception as e:
+            print(f"4-bit unavailable ({e}), loading teacher in bf16.")
+    teacher = AutoModelForCausalLM.from_pretrained(teacher_model, **teacher_kwargs)
+    if "quantization_config" not in teacher_kwargs:
+        teacher.to(device)
+    teacher.eval()
     for p in teacher.parameters():
         p.requires_grad = False
 
@@ -200,10 +260,15 @@ def distill_tile(
     if adamw_p:
         opts.append(torch.optim.AdamW(adamw_p, lr=1e-3))
 
+    import random
     for epoch in range(epochs):
+        random.shuffle(rows)
         total = 0.0
+        n_steps = 0
         batches = list(make_batches(tokenizer, rows, system, max_len, batch_size))
-        for input_ids, attn, labels in batches:
+        for opt in opts:
+            opt.zero_grad()
+        for step, (input_ids, attn, labels) in enumerate(batches):
             input_ids, attn, labels = input_ids.to(device), attn.to(device), labels.to(device)
 
             with torch.no_grad():
@@ -215,14 +280,17 @@ def distill_tile(
                 for opt in opts:
                     opt.zero_grad()
                 continue
-            loss.backward()
-            torch.nn.utils.clip_grad_norm_(
-                [p for p in student.parameters() if p.requires_grad], 1.0)
-            for opt in opts:
-                opt.step()
-                opt.zero_grad()
+            (loss / grad_accum).backward()
             total += loss.item()
-        print(f"epoch {epoch+1}/{epochs} avg distill loss {total/max(len(batches),1):.4f}")
+            n_steps += 1
+
+            if (step + 1) % grad_accum == 0 or (step + 1) == len(batches):
+                torch.nn.utils.clip_grad_norm_(
+                    [p for p in student.parameters() if p.requires_grad], 1.0)
+                for opt in opts:
+                    opt.step()
+                    opt.zero_grad()
+        print(f"epoch {epoch+1}/{epochs} avg distill loss {total/max(n_steps,1):.4f}")
 
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
@@ -231,7 +299,9 @@ def distill_tile(
     (out / "stratum_card.json").write_text(json.dumps({
         "stratum_name": out.name, "base_model": student_model,
         "teacher_model": teacher_model, "rank": rank, "method": "logit_distillation",
+        "lr": lr, "epochs": epochs, "batch_size": batch_size,
+        "grad_accum": grad_accum, "max_len": max_len,
         "temperature": temperature, "alpha": alpha, "skill_file": skill_path,
         "num_pairs": len(rows), "seed": seed, "stratum_version": 1,
-    }, indent=2))
+    }, indent=2), encoding="utf-8")
     print(f"\nDistilled stratum saved to {out_dir} (base: {student_model})")
