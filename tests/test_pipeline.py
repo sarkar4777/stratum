@@ -159,6 +159,40 @@ def test_train_rejects_prompt_longer_than_max_len(tiny_base, tmp_path):
                    load_4bit=False)
 
 
+def test_stack_runs_a_whole_recipe(tiny_base, tmp_path, monkeypatch):
+    """The one-command build: recipe in, trained strata and merged model out."""
+    import sys
+    import yaml
+    from stratum.__main__ import main
+
+    examples = Path(__file__).parent.parent / "examples"
+    recipe = {
+        "base_model": tiny_base,
+        "output_model": str(tmp_path / "model"),
+        "load_4bit": False,
+        "max_len": 96,
+        "batch_size": 2,
+        "strata": [
+            {"name": "extract", "skill": str(examples / "extract.jsonl"),
+             "out": str(tmp_path / "s1"), "rank": 2, "epochs": 1},
+            {"name": "classify", "skill": str(examples / "classify.jsonl"),
+             "out": str(tmp_path / "s2"), "rank": 2, "epochs": 1},
+        ],
+        "merge": {"method": "linear", "weights": [1.0, 1.0]},
+    }
+    rp = tmp_path / "recipe.yaml"
+    rp.write_text(yaml.safe_dump(recipe), encoding="utf-8")
+
+    monkeypatch.setattr(sys, "argv", ["stratum", "stack", str(rp)])
+    main()
+
+    assert (tmp_path / "model" / "config.json").exists()
+    assert (tmp_path / "model" / "stratum_merge.json").exists()
+    card = read_stratum_card(str(tmp_path / "s1"))
+    assert card["max_len"] == 96  # recipe-wide setting reached the training run
+    assert card["batch_size"] == 2
+
+
 def test_train_handles_utf8_data(tiny_base, tmp_path, skill_file):
     """Non-ascii training data (euro signs, accents) must survive the trip."""
     rows = [{"prompt": "Extraire le total: 'Total: 88 €'",
