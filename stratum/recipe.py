@@ -36,6 +36,13 @@ Recipe shape (see examples/recipe.yaml):
     density: 0.2                       # ties only
     drop: 0.9                          # dare only
     seed: 42                           # dare only
+  evals:                               # optional - run after the merge,
+    - test: examples/test-extract.jsonl  # making the recipe build AND test
+      scorer: json_field
+      min_score: 0.6                   # the build fails below this
+    - test: examples/test-classify.jsonl
+      scorer: exact
+      min_score: 0.6
 """
 from __future__ import annotations
 
@@ -43,12 +50,13 @@ from pathlib import Path
 
 TOP_KEYS = {"base_model", "output_model", "optimizer", "system", "load_4bit",
             "lr", "adamw_lr", "batch_size", "grad_accum", "max_len", "seed",
-            "strata", "merge"}
+            "strata", "merge", "evals"}
 STRATUM_KEYS = {"name", "skill", "out", "rank", "epochs", "optimizer", "system",
                 "load_4bit", "lr", "adamw_lr", "batch_size", "grad_accum",
                 "max_len", "seed", "distill"}
 DISTILL_KEYS = {"teacher", "temperature", "alpha", "teacher_4bit", "batch_size"}
 MERGE_KEYS = {"method", "weights", "density", "drop", "seed"}
+EVAL_KEYS = {"test", "scorer", "min_score", "system"}
 
 
 def _check_keys(given: dict, allowed: set, where: str):
@@ -101,6 +109,17 @@ def load_recipe(path: str) -> dict:
             f"{path}: merge.weights has {len(weights)} entries for "
             f"{len(recipe['strata'])} strata."
         )
+
+    evals = recipe.get("evals", [])
+    if not isinstance(evals, list):
+        raise ValueError(f"{path}: 'evals' must be a list.")
+    for i, ev in enumerate(evals):
+        where = f"{path} evals[{i}]"
+        if not isinstance(ev, dict):
+            raise ValueError(f"{where} must be a mapping.")
+        _check_keys(ev, EVAL_KEYS, where)
+        if "test" not in ev:
+            raise ValueError(f"{where} is missing required key 'test'.")
     return recipe
 
 

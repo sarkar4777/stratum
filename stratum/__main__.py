@@ -2,6 +2,7 @@
 STRATUM command-line interface.
 
     stratum doctor                                   check hardware, recommend size
+    stratum plan recipe.yaml                         will this build fit here?
     stratum train --skill S.jsonl --out strata/x     train one stratum
     stratum merge strata/a strata/b --out model      fuse strata into a model
     stratum eval model --test T.jsonl                score a model (or one stratum)
@@ -50,6 +51,8 @@ def cmd_doctor(args):
     print()
     from .hf_utils import check_hf_ready
     check_hf_ready(verbose=True)
+    print("\nTo check a specific build against this machine: "
+          "`stratum plan recipe.yaml`")
 
 
 def cmd_train(args):
@@ -142,6 +145,25 @@ def cmd_teacher_gen(args):
     generate_dataset_from_teacher(seeds, args.instruction, teacher_fn, args.out)
 
 
+def cmd_plan(args):
+    """Check a recipe against this machine before spending hours on it."""
+    from .plan import (plan_recipe, print_plan, probe_hardware,
+                       write_remote_bundle)
+    from .recipe import load_recipe
+
+    try:
+        recipe = load_recipe(args.recipe)
+    except (ValueError, FileNotFoundError) as e:
+        sys.exit(str(e))
+
+    hw = probe_hardware()
+    plan = plan_recipe(recipe, hw)
+    print_plan(plan, hw, args.recipe)
+    if args.emit_remote:
+        print()
+        write_remote_bundle(args.emit_remote, args.recipe, recipe)
+
+
 def cmd_stack(args):
     """Run a whole build from a YAML recipe: train listed strata, then merge them."""
     from .recipe import load_recipe, stratum_setting
@@ -151,6 +173,20 @@ def cmd_stack(args):
         recipe = load_recipe(args.recipe)
     except (ValueError, FileNotFoundError) as e:
         sys.exit(str(e))
+
+    # Preflight: refuse a build the hardware clearly cannot run, before it
+    # trains for an hour and dies. The estimate is rough, so only a clear
+    # no-fit stops the build, and --force overrides even that.
+    from .plan import NO_FIT, plan_recipe, probe_hardware, rental_advice
+    hw = probe_hardware()
+    plan = plan_recipe(recipe, hw)
+    if plan["verdict"] == NO_FIT and not args.force:
+        sys.exit(
+            f"This build likely will not fit on this machine "
+            f"(run `stratum plan {args.recipe}` for the details and fixes).\n"
+            f"For the training burst, {rental_advice(plan['base_params_b'])}\n"
+            f"Use --force to try anyway."
+        )
 
     base = recipe["base_model"]
     strata_dirs = []
@@ -201,6 +237,23 @@ def cmd_stack(args):
                      seed=m.get("seed", 42))
     except (ValueError, FileNotFoundError) as e:
         sys.exit(str(e))
+
+    # Eval gates: the recipe tests what it built. A failed gate fails the
+    # build, which is what lets CI or a rented box run this unattended.
+    failures = []
+    if recipe.get("evals"):
+        from .evaluate import run_eval
+        print("\n=== Evaluating ===")
+        for ev in recipe["evals"]:
+            report = run_eval(recipe["output_model"], ev["test"],
+                              scorer=ev.get("scorer", "contains"),
+                              system=ev.get("system", recipe.get("system")))
+            bar = ev.get("min_score")
+            if bar is not None and report["mean"] < bar:
+                failures.append(f"{ev['test']}: {report['mean']:.1%} "
+                                f"is below min_score {bar:.1%}")
+    if failures:
+        sys.exit("Build FAILED its eval gates:\n  " + "\n  ".join(failures))
     print(f"\nBuild complete -> {recipe['output_model']}")
 
 
@@ -287,8 +340,16 @@ def main():
     tg.add_argument("--model", default=None, help="teacher model name/id for the chosen backend")
     tg.set_defaults(func=cmd_teacher_gen)
 
+    pl = sub.add_parser("plan", help="check a recipe against this machine, or plan a remote build")
+    pl.add_argument("recipe")
+    pl.add_argument("--emit-remote", default=None, metavar="DIR",
+                    help="write a build-and-test script for a rented GPU box here")
+    pl.set_defaults(func=cmd_plan)
+
     s = sub.add_parser("stack", help="run a full build from a YAML recipe")
     s.add_argument("recipe")
+    s.add_argument("--force", action="store_true",
+                   help="run even when the preflight says it will not fit")
     s.set_defaults(func=cmd_stack)
 
     args = p.parse_args()
