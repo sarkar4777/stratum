@@ -81,7 +81,7 @@ lora_cfg = LoraConfig(
 model = get_peft_model(base_model, lora_cfg)
 ```
 
-`target_modules="all-linear"` puts an adapter on every linear grid, which outperforms the old habit of adapting only some. `lora_alpha` is a scaling factor (`BxA` is multiplied by `alpha/r`), and keeping it at `2xr` means changing rank doesn't silently change your effective learning rate.
+`target_modules="all-linear"` puts an adapter on every linear grid - concretely, the weight grids inside every one of the model's transformer layers (doc 0), both the attention step's grids and the plain processing grids. Adapting all of them outperforms the old habit of adapting only some. `lora_alpha` is a scaling factor (`BxA` is multiplied by `alpha/r`), and keeping it at `2xr` means changing rank doesn't silently change your effective learning rate.
 
 ## What you now know
 

@@ -2,13 +2,17 @@
 
 *Every term in STRATUM, with full form and plain definition.*
 
+**Attention** - The step in a transformer layer where each token looks back at the other tokens to decide which ones matter for the next prediction. STRATUM never modifies it, but the weight grids inside it are among those LoRA adapts.
+
 **Adapter** - A small trainable add-on attached to a frozen model that adjusts it for one skill. In STRATUM, a "stratum." Often under 1% of the model's size.
 
 **AdamW (Adam with decoupled Weight decay)** - The standard optimizer. Keeps two running notes per parameter (momentum, variance) - effective but memory-heavy. STRATUM uses Muon for weight matrices and a small AdamW for the rest.
 
+**Backward pass (backpropagation)** - The bookkeeping sweep after each prediction that computes every parameter's gradient, walking backward through the layers. The forward pass makes the prediction, the backward pass assigns the blame.
+
 **Base model** - The pretrained model you start from and specialize. All strata you merge must share one base.
 
-**Batch** - Several training examples processed together for GPU efficiency.
+**Batch (minibatch)** - Several training examples processed together for GPU efficiency. "Minibatch" stresses that it's a small random sample of the dataset, which is what makes gradients noisy estimates - and training "stochastic".
 
 **bf16 (brain float 16)** - Storing each number in 2 bytes - the common training format.
 
@@ -22,11 +26,15 @@
 
 **Data distillation** - The simple flavor: a teacher model generates the training pairs, which then train a normal stratum. Works with any teacher, including closed APIs.
 
+**Layer** - One grid of dials the numbers multiply through, plus a simple squashing function. Layers stack - each one's output feeds the next - and a model is a few dozen of them.
+
+**Learning rate** - The master knob for how big each training step is (`--lr`). Too small and training crawls, too large and the dials overshoot and never settle. Muon's default here is 2e-2, AdamW's 1e-3 - different optimizers want very different values.
+
 **Logit** - The raw score a model assigns to one vocabulary token before scores are turned into probabilities. "The logits" are the full row of scores, one per token in the vocabulary.
 
 **Logit distillation** - The advanced flavor: teacher and student run together and the student is trained to match the teacher's full softened distribution (soft labels). Needs a shared tokenizer.
 
-**Soft labels** - A teacher's full probability distribution over next tokens (e.g. billing 88%, account 9%, ...), which carries richer information than the single correct answer (the hard label). The signal logit distillation learns from.
+**Soft labels** - A teacher's full probability distribution over next tokens (e.g. billing 77%, account_access 17%, ...), which carries richer information than the single correct answer (the hard label). The signal logit distillation learns from.
 
 **KL divergence (Kullback-Leibler divergence)** - A measure of how different two probability distributions are. Logit distillation minimizes it to pull the student's distribution toward the teacher's.
 
@@ -103,6 +111,8 @@
 **Stratum / strata** - STRATUM's word for a skill adapter / adapters. Small, separate, mergeable - the pieces you build from.
 
 **stratum_card.json** - The provenance file saved with each stratum: base model, skill file and its SHA-256 fingerprint, every setting, final loss, and build time. Used to verify merge compatibility and as an audit trail. The merged model's `stratum_merge.json` carries all input cards forward.
+
+**Transformer** - The stack design used by every model in this project: a few dozen layers, each pairing an attention step with plain multiply-through-grids processing. STRATUM adjusts the dials inside the grids and never changes the design.
 
 **Token** - A chunk of text (~3/4 word) the model reads and writes in. Models have a fixed vocabulary of tokens.
 

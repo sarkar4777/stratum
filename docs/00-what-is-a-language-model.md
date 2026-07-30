@@ -40,6 +40,12 @@ Inside the model are billions of numbers called **parameters** (collectively the
 - The parameters *are* the knowledge. There's no parameter labeled "France fact" - knowledge is spread across billions of numbers no human reads directly.
 - Think of them as billions of tiny dials. Their combined setting determines every output. **Training sets the dials.**
 
+## The shape inside: layers, and the word "transformer"
+
+Those billions of dials aren't a loose heap. They're organized into **layers**, and a layer is a simple thing: a grid of dials that the numbers get multiplied through, followed by a simple squashing function that keeps values in range. Layers **stack** - the output of one becomes the input of the next, and that stack is the "fixed sequence of multiplications" from a moment ago. Early layers end up handling surface patterns (spelling, common phrases) and later layers end up handling meaning, though nobody assigns those jobs - they emerge from training.
+
+The specific stack design every model you'll touch uses is called a **transformer**. Its layers come in pairs of steps: an **attention** step, where each token looks back at the other tokens in the input to decide which ones matter for predicting what comes next, and a plain processing step of the multiply-through-grids kind. A model like Qwen3-1.7B is a few dozen of these layers stacked, and that's the whole architecture story you need for this project - STRATUM never modifies the design, it adjusts the dials inside the grids. When doc 3 attaches small adapters "to every linear grid," those grids are the ones inside these layers.
+
 ## Training: the four-step loop
 
 This loop is the foundation of the entire project. Learn it once.
@@ -67,7 +73,7 @@ STRATUM usually starts from an instruct model, then layers your specific skills 
 ## What you now know
 
 - A model **predicts the next token**, repeatedly - that's how it writes.
-- It's billions of **parameters** (dials) holding everything it knows.
+- It's billions of **parameters** (dials) holding everything it knows, organized into stacked **layers** - the stack design is called a **transformer**.
 - **Training** is a four-step loop lowering **loss**, and the **optimizer** does the nudging.
 - You start from a **pretrained** model and do cheap **fine-tuning**, not pretraining.
 

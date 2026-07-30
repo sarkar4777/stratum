@@ -19,15 +19,29 @@ Here's the insight that makes distillation more than just "copy the teacher's an
 When a model predicts the next token (doc 0), it doesn't just pick one - it produces a *probability for every possible token*. Ask a model to classify a ticket and it might output:
 
 ```
-billing 88%
-account_access 9%
-bug 2%
-how_to 1%
+billing 77%
+account_access 17%
+bug 4%
+how_to 2%
 ```
 
 The single correct answer is "billing." A rulebook teaches only that. But the *full distribution* carries much richer information: it says billing is likely, account_access is a plausible near-miss, and bug/how_to are basically wrong. That shape - the teacher's **uncertainty** - is knowledge. It tells the student *how* to think about the problem, not just the final answer.
 
 Training the student to match the teacher's whole distribution (called the **soft labels**) instead of just the one correct token (the **hard label**) is what gives distillation its power. The student learns the teacher's judgment, not just its conclusions.
+
+## Watch temperature work
+
+Distillation has one knob that sounds mystical and isn't: **temperature**. Why do we need it at all? Because a confident teacher hides its own judgment: the near-miss answers sit at probabilities so small that when the student is trained to match the distribution, they contribute almost nothing - the student ends up learning little more than the hard label. Temperature fixes that: divide the teacher's raw scores (the logits) by a number T greater than 1 before turning them into probabilities, and the distribution flattens - the near-misses become large enough to teach from. The demo shows exactly what that does to the ticket example above (`python scripts/demo_concepts.py`, demo 6):
+
+```
+                      T=1      T=2      T=4
+         billing   76.7%   53.5%   38.8%
+  account_access   17.1%   25.3%   26.7%
+             bug    3.8%   11.9%   18.3%
+          how_to    2.3%    9.3%   16.2%
+```
+
+Same teacher, same scores. At T=1 the runner-up is barely visible - the student would learn little more than the hard label. At T=2 the near-miss is a quarter of the distribution: the student can now *see* that account_access was plausible, which is the judgment we wanted to transfer. Push too far (T=4) and everything blurs toward uniform, teaching the student that even nonsense options were half-reasonable. That's the whole tradeoff behind `--temperature`, and why 2.0 is the default.
 
 ## Two ways to distill (STRATUM supports both)
 

@@ -94,6 +94,18 @@ stratum merge strata/*/ --out models/m --method dare --drop 0.9
 
 You don't memorize these - you escalate: linear, check eval. If skills degrade, TIES. If many strata clash, DARE.
 
+## See the conflict happen
+
+The demo builds the failure on purpose so you can watch TIES fix it. Two strata, each carrying a strong signal on its own rows of a weight grid, plus weak opposite-signed noise sprayed across the *other* stratum's rows - the crosstalk real strata pick up from training on overlapping text. Then it merges both ways and measures how much of the ideal merge (both signals, no noise) each method recovers:
+
+```
+ ideal merge keeps both signals, drops the noise
+ linear merge recovers 76% of the ideal
+ TIES merge   recovers 100% of the ideal
+```
+
+Linear adds everything, noise included, so each skill's signal arrives diluted by the other's noise. TIES trims each stratum to its strongest entries *before* anything is added, so the crosstalk never gets a vote. Run it yourself - `python scripts/demo_concepts.py`, demo 5 - and read the twenty lines that produce it: the trim-then-sign-vote there is the same logic as `merge_ties` in `stratum/merge.py`, minus the tensors.
+
 ## Where merging fails - the honest part
 
 **Different bases don't merge.** A stratum is tuned to *its* base's specific dials. Add it to a different base and it's nonsense. STRATUM records each stratum's base in `stratum_card.json` and **refuses** to merge mismatched ones. All strata you fuse must share one base.
