@@ -1,0 +1,17 @@
+# build artifacts a user produces locally
+strata/
+models/
+*.egg-info/
+dist/
+build/
+
+# environments and caches
+.venv/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# editor noise
+.vscode/
+.idea/

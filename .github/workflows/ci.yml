@@ -1,0 +1,30 @@
+# Runs the full test suite, including the end-to-end pipeline test that
+# trains, merges, and evaluates a tiny model on CPU. Extend this with your
+# own eval gate as described in docs/10-scaling-and-production.md.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+      - name: Install CPU torch first (small wheel, no CUDA)
+        run: pip install torch --index-url https://download.pytorch.org/whl/cpu
+      - name: Install stratum with dev extras
+        run: pip install -e .[dev]
+      - name: Run tests
+        run: python -m pytest tests/ -v
+      - name: Run the concept demo (docs promise it works with numpy alone)
+        run: python scripts/demo_concepts.py

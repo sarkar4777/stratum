@@ -1,0 +1,3 @@
+{"prompt": "Extract the total from this invoice: 'Subtotal 40, tax 4, total 44'", "expected": {"total": 44}, "skill": "extract"}
+{"prompt": "Extract the total from this invoice: 'Final amount: $310'", "expected": {"total": 310}, "skill": "extract"}
+{"prompt": "Extract the total from this invoice: 'Due upon receipt: 1,250 EUR'", "expected": {"total": 1250}, "skill": "extract"}
