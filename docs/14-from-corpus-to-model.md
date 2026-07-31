@@ -35,6 +35,18 @@ flowchart LR
 
 Everything from `train` onward is the pipeline you already know (docs 6, 5, 8). The two `corpus` commands are the front end, and they are built for corpora in the thousands of files: every expensive step is cached and resumable, a corrupt file is recorded and skipped rather than fatal, and every chunk carries provenance back to its source file and position.
 
+## Step 0 - fetch: when the corpus lives on the web
+
+Often part of the corpus is not in a folder yet - it's on an intranet, a document portal, or the public web. `fetch` pulls it down:
+
+```bash
+stratum corpus fetch --urls-file sources.txt --out raw/
+# or inline:
+stratum corpus fetch https://example.com/manual.pdf https://example.com/spec.html --out raw/
+```
+
+`sources.txt` is one URL per line, `#` comments allowed - a reviewable, versionable record of exactly what went into the corpus. Failed URLs are reported and skipped, re-running downloads only what's missing, and file extensions are corrected from the server's content type so ingest picks the right extractor. Files you already have locally just go straight into the same folder.
+
 ## Step 1 - ingest: the folder becomes clean text
 
 ```bash
@@ -84,6 +96,8 @@ The industrial behaviors carry over from `teacher-gen`: pairs are written the mo
 - **Provenance flows through.** Every pair records which chunk and source file it came from. When an expert reviewer finds a bad pair, you know exactly which document produced it.
 
 The same privacy rule as everywhere: `--teacher hf` keeps the corpus on your hardware, `--teacher openai/anthropic` sends every chunk to that API.
+
+Teacher time is the budget item on a big corpus - thousands of chunks means thousands of teacher calls. `--max-chunks N` caps it by sampling N chunks spread evenly across the file, so every source document contributes rather than whichever file sorts first. Start sampled, check the pair quality, then raise the cap or drop it for the full run.
 
 One pipeline per *skill* is the pattern: run `pairs` more than once with different instructions - one pass for grounded Q&A, one for extraction ("Write pairs that extract equipment IDs, dates, and pressures as JSON"), one for classification - each producing the training file for its own stratum, exactly the layered build from doc 2.
 

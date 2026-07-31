@@ -34,10 +34,6 @@ import torch
 import torch.nn.functional as F
 
 
-# --------------------------------------------------------------------------
-# 1. DATA DISTILLATION - teacher writes the training data
-# --------------------------------------------------------------------------
-
 def build_teacher_prompt(task_instruction: str, seed_input: str) -> str:
     """Compose a prompt asking the teacher to produce a high-quality response.
 
@@ -129,10 +125,6 @@ def generate_dataset_from_teacher(
     print(f"Wrote {written} distilled pairs to {out_path}")
     return out_path
 
-
-# --------------------------------------------------------------------------
-# 2. LOGIT DISTILLATION - student matches teacher's soft probabilities
-# --------------------------------------------------------------------------
 
 def distillation_loss(student_logits, teacher_logits, labels,
                       temperature: float = 2.0, alpha: float = 0.5):

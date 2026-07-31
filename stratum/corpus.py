@@ -46,9 +46,89 @@ class CorpusError(Exception):
     """A per-file extraction problem, with a message a non-ML developer can act on."""
 
 
-# --------------------------------------------------------------------------
-# Extraction - one function per format, dispatched by extension
-# --------------------------------------------------------------------------
+_CTYPE_EXT = {"text/html": ".html", "application/pdf": ".pdf",
+              "text/plain": ".txt", "text/markdown": ".md"}
+
+
+def _filename_for(url: str, content_type: str) -> str:
+    from urllib.parse import unquote, urlsplit
+    name = unquote(urlsplit(url).path.rstrip("/").rsplit("/", 1)[-1]) or "download"
+    name = re.sub(r"[^\w.() -]", "_", name)[:120]
+    if "." not in name:
+        name += _CTYPE_EXT.get(content_type, ".txt")
+    return name
+
+
+def fetch_urls(urls: list[str], out_dir: str, retries: int = 3,
+               verbose: bool = True) -> dict:
+    """Download a list of URLs into a folder ready for ingest.
+
+    The acquisition step of the pipeline: give it the pages, reports, and
+    files the corpus should contain, and it pulls them down with the same
+    survival rules as everything else here - retries with growing pauses,
+    a failed URL recorded and skipped rather than fatal, and re-running
+    skips files already downloaded. Filenames come from the URL, with the
+    extension corrected from the server's content type so ingest can
+    dispatch the right extractor.
+    """
+    import urllib.request
+
+    from . import __version__
+
+    out = Path(out_dir)
+    out.mkdir(parents=True, exist_ok=True)
+    counts = {"fetched": 0, "already": 0, "failed": 0}
+    for url in urls:
+        url = url.strip()
+        if not url or url.startswith("#"):
+            continue
+        # Resume check before any network traffic: the name is known up front
+        # except for its extension, so probe the possible extensions too.
+        stem = _filename_for(url, "")
+        candidates = {stem} | {stem.rsplit(".", 1)[0] + ext
+                               for ext in _CTYPE_EXT.values()}
+        existing = next((c for c in candidates if (out / c).exists()), None)
+        if existing:
+            counts["already"] += 1
+            if verbose:
+                print(f" already have {existing}")
+            continue
+
+        data = None
+        error = None
+        ctype = ""
+        for attempt in range(retries):
+            try:
+                req = urllib.request.Request(
+                    url, headers={"User-Agent": f"stratum-corpus/{__version__}"})
+                with urllib.request.urlopen(req, timeout=60) as resp:
+                    ctype = (resp.headers.get("Content-Type") or "").split(";")[0].strip()
+                    data = resp.read()
+                break
+            except Exception as e:
+                error = e
+                wait = 2 ** attempt
+                if verbose:
+                    print(f" {url}: {e} - retrying in {wait}s ({attempt + 1}/{retries})")
+                time.sleep(wait)
+        if data is None:
+            counts["failed"] += 1
+            if verbose:
+                print(f" FAILED {url}: {error}")
+            continue
+        name = _filename_for(url, ctype)
+        (out / name).write_bytes(data)
+        counts["fetched"] += 1
+        if verbose:
+            print(f" fetched {name} ({len(data):,} bytes)")
+    if verbose:
+        print(f"\nFetched {counts['fetched']} files "
+              f"({counts['already']} already present, {counts['failed']} failed) "
+              f"-> {out_dir}")
+        if counts["failed"]:
+            print(" failed URLs can simply be re-run - existing files are kept.")
+    return counts
+
 
 def _extract_txt(path: Path) -> str:
     return path.read_text(encoding="utf-8", errors="replace")
@@ -186,10 +266,6 @@ def extract_text(path: Path) -> str:
     return _extract_txt(path)
 
 
-# --------------------------------------------------------------------------
-# Redaction - a baseline scrub, not a compliance product
-# --------------------------------------------------------------------------
-
 _REDACTIONS = [
     ("email", re.compile(r"[\w.+-]+@[\w-]+\.[\w.-]+")),
     ("phone", re.compile(r"(?<![\d-])(?:\+?\d[\d\s().-]{8,}\d)(?![\d-])")),
@@ -211,10 +287,6 @@ def redact(text: str) -> tuple[str, dict]:
             counts[name] = n
     return text, counts
 
-
-# --------------------------------------------------------------------------
-# Chunking - overlapping windows, cut at natural boundaries when possible
-# --------------------------------------------------------------------------
 
 def chunk_text(text: str, size: int = 2400, overlap: int = 240) -> list[tuple[int, str]]:
     """Cut text into overlapping chunks of about `size` characters.
@@ -245,10 +317,6 @@ def chunk_text(text: str, size: int = 2400, overlap: int = 240) -> list[tuple[in
         start = end - overlap
     return chunks
 
-
-# --------------------------------------------------------------------------
-# Ingest - the resumable walk over a whole corpus folder
-# --------------------------------------------------------------------------
 
 def _sha256_file(path: Path) -> str:
     h = hashlib.sha256()
@@ -399,10 +467,6 @@ def ingest(in_dir: str, out_dir: str, vision_teacher=None, redact_pii: bool = Fa
     return summary
 
 
-# --------------------------------------------------------------------------
-# Pair generation - a teacher writes grounded Q/A pairs per chunk
-# --------------------------------------------------------------------------
-
 PAIR_PROMPT = """\
 You are writing training data for a smaller model.
 
@@ -422,17 +486,34 @@ Passage (from {source}):
 
 
 def _parse_pairs(raw: str) -> list[dict]:
-    start = raw.find("[")
-    end = raw.rfind("]")
-    if start == -1 or end <= start:
-        raise ValueError("teacher did not return a JSON array")
-    pairs = json.loads(raw[start:end + 1])
+    """Pull prompt/response pairs out of whatever a teacher wrote.
+
+    The prompt asks for one JSON array, but real teachers - small local ones
+    especially - also emit one object per line, prose around the JSON, or
+    trailing commentary after the array. This scans the text and collects
+    every JSON value that carries a prompt and a response, so a chunk only
+    fails when the output contains no usable pairs at all.
+    """
+    decoder = json.JSONDecoder()
     good = []
-    for p in pairs:
-        if isinstance(p, dict) and p.get("prompt") and p.get("response"):
-            good.append({"prompt": str(p["prompt"]), "response": str(p["response"])})
+    i = 0
+    while i < len(raw):
+        if raw[i] not in "[{":
+            i += 1
+            continue
+        try:
+            value, end = decoder.raw_decode(raw, i)
+        except ValueError:
+            i += 1
+            continue
+        items = value if isinstance(value, list) else [value]
+        for p in items:
+            if isinstance(p, dict) and p.get("prompt") and p.get("response"):
+                good.append({"prompt": str(p["prompt"]),
+                             "response": str(p["response"])})
+        i = end
     if not good:
-        raise ValueError("teacher returned no usable prompt/response pairs")
+        raise ValueError("teacher output contained no usable prompt/response pairs")
     return good
 
 
@@ -446,6 +527,7 @@ def _is_test_chunk(chunk_id: str, test_fraction: float, seed: int) -> bool:
 def generate_pairs(chunks_path: str, instruction: str, teacher_fn,
                    out_train: str, out_test: str | None = None,
                    per_chunk: int = 3, test_fraction: float = 0.1,
+                   max_chunks: int | None = None,
                    retries: int = 3, seed: int = 42, verbose: bool = True) -> dict:
     """Ask a teacher to write grounded pairs for every chunk.
 
@@ -454,10 +536,23 @@ def generate_pairs(chunks_path: str, instruction: str, teacher_fn,
     same command resumes - chunks already answered in the output files are
     skipped. The split is per chunk (not per pair), decided by a stable hash,
     so a chunk's content is never in both train and test.
+
+    max_chunks caps teacher cost on a big corpus by sampling evenly across
+    the chunk file - every source contributes, rather than the first N chunks
+    all coming from whichever file sorts first. The sample is deterministic,
+    so re-runs resume cleanly.
     """
+    import math
+
     from .data import load_jsonl
 
     chunks = load_jsonl(chunks_path, required_keys=("id", "text", "source"))
+    if max_chunks and len(chunks) > max_chunks:
+        step = math.ceil(len(chunks) / max_chunks)
+        chunks = chunks[::step]
+        if verbose:
+            print(f"Sampling {len(chunks)} of the chunks (every {step}th) "
+                  f"to cap teacher cost - raise --max-chunks for more coverage")
     if out_test is None and test_fraction > 0:
         raise ValueError("test_fraction is set but no out_test path was given")
 

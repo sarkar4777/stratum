@@ -238,6 +238,65 @@ def test_generate_pairs_survives_bad_teacher(corpus_dir, tmp_path, monkeypatch):
     assert counts["train_pairs"] == 0
 
 
+def test_parse_pairs_tolerates_messy_teachers():
+    from stratum.corpus import _parse_pairs
+
+    # A clean array.
+    assert len(_parse_pairs('[{"prompt": "q", "response": "a"}]')) == 1
+    # One object per line, the way small local teachers often answer.
+    two = _parse_pairs('{"prompt": "q1", "response": "a1"}\n'
+                       '{"prompt": "q2", "response": "a2"}')
+    assert len(two) == 2
+    # Prose around the JSON, and commentary after the array.
+    messy = _parse_pairs('Here are the pairs:\n'
+                         '[{"prompt": "q", "response": "a"}]\n'
+                         'Let me know if you need more.')
+    assert len(messy) == 1
+    with pytest.raises(ValueError):
+        _parse_pairs("no json here at all")
+
+
+def test_generate_pairs_max_chunks_samples_evenly(corpus_dir, tmp_path):
+    out = tmp_path / "out"
+    ingest(str(corpus_dir), str(out), verbose=False)
+    total = len((out / "chunks.jsonl").read_text(encoding="utf-8").splitlines())
+    assert total > 4
+    calls = []
+
+    def counting(prompt):
+        calls.append(prompt)
+        return _fake_pair_teacher(prompt)
+
+    generate_pairs(str(out / "chunks.jsonl"), "Ask.", counting,
+                   str(tmp_path / "t.jsonl"), None, test_fraction=0.0,
+                   max_chunks=3, verbose=False)
+    assert len(calls) <= 3
+
+
+def test_fetch_urls_from_local_files(tmp_path):
+    from stratum.corpus import fetch_urls
+
+    src = tmp_path / "srv"
+    src.mkdir()
+    (src / "report.html").write_text("<p>Grid frequency is 50 Hz.</p>",
+                                     encoding="utf-8")
+    (src / "notes.txt").write_text("Substation checklist.", encoding="utf-8")
+    urls = [(src / "report.html").as_uri(), (src / "notes.txt").as_uri(),
+            "# a comment line", (src / "missing.txt").as_uri()]
+
+    out = tmp_path / "raw"
+    first = fetch_urls(urls, str(out), retries=1, verbose=False)
+    assert first["fetched"] == 2
+    assert first["failed"] == 1                 # the missing file
+    assert (out / "report.html").exists()
+    assert (out / "notes.txt").exists()
+
+    # Re-running downloads nothing new.
+    again = fetch_urls(urls, str(out), retries=1, verbose=False)
+    assert again["fetched"] == 0
+    assert again["already"] == 2
+
+
 def test_vision_backends():
     teacher = get_vision_teacher("echo")
     assert "gauge.png" in teacher("some/dir/gauge.png")

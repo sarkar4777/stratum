@@ -136,6 +136,19 @@ def cmd_distill(args):
     )
 
 
+def cmd_corpus_fetch(args):
+    from .corpus import fetch_urls
+
+    urls = list(args.urls)
+    if args.urls_file:
+        urls += [l for l in
+                 Path(args.urls_file).read_text(encoding="utf-8").splitlines()
+                 if l.strip()]
+    if not urls:
+        sys.exit("No URLs given. Pass them as arguments or with --urls-file.")
+    fetch_urls(urls, args.out)
+
+
 def cmd_corpus_ingest(args):
     from .corpus import ingest
 
@@ -160,7 +173,7 @@ def cmd_corpus_pairs(args):
         generate_pairs(args.chunks, args.instruction, teacher_fn,
                        out_train=args.out, out_test=args.test_out,
                        per_chunk=args.per_chunk, test_fraction=args.test_fraction,
-                       seed=args.seed)
+                       max_chunks=args.max_chunks, seed=args.seed)
     except (ValueError, FileNotFoundError) as e:
         sys.exit(str(e))
 
@@ -371,6 +384,13 @@ def main():
     co = sub.add_parser("corpus", help="turn a folder of documents and images into training data")
     cosub = co.add_subparsers(dest="corpus_cmd", required=True)
 
+    cf = cosub.add_parser("fetch", help="download web pages and files into a corpus folder")
+    cf.add_argument("urls", nargs="*", help="URLs to download")
+    cf.add_argument("--urls-file", default=None,
+                    help="text file with one URL per line (# comments allowed)")
+    cf.add_argument("--out", required=True, help="folder to download into (re-run to resume)")
+    cf.set_defaults(func=cmd_corpus_fetch)
+
     ci = cosub.add_parser("ingest", help="extract, deduplicate, and chunk a corpus folder")
     ci.add_argument("--in", dest="in_dir", required=True, help="folder of documents and images")
     ci.add_argument("--out", required=True, help="output folder for chunks.jsonl, manifest, and cache")
@@ -402,6 +422,9 @@ def main():
                          "to that API - use hf (local) for data that must not leave")
     cp.add_argument("--model", default=None, help="teacher model id for the chosen backend")
     cp.add_argument("--per-chunk", type=int, default=3, help="pairs to request per chunk")
+    cp.add_argument("--max-chunks", type=int, default=None,
+                    help="cap teacher cost by sampling this many chunks, spread "
+                         "evenly across the corpus")
     cp.add_argument("--test-fraction", type=float, default=0.1,
                     help="fraction of CHUNKS whose pairs go to the test set")
     cp.add_argument("--seed", type=int, default=42, help="makes the train/test split stable")

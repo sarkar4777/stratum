@@ -14,7 +14,6 @@ from stratum.evaluate import (score_contains, score_exact, score_json_field,
                               _values_match)
 
 
-# ---------------------------------------------------------------- muon
 
 def test_orthogonalization_flattens():
     torch.manual_seed(0)
@@ -72,7 +71,6 @@ def test_param_split_routes_embeddings_to_adamw():
     assert len(adamw_p) == 2  # embedding table and proj.bias
 
 
-# ---------------------------------------------------------------- merge math
 
 def _write_fake_stratum(d, extra_cfg=None, extra_tensors=None):
     r, alpha = 8, 16
@@ -151,7 +149,6 @@ def test_merge_rejects_bad_method():
         merge("nope", [{"w": torch.randn(4, 4)}])
 
 
-# ---------------------------------------------------------------- data
 
 class FakeTok:
     pad_token_id = 0
@@ -224,7 +221,6 @@ def test_strip_think():
     assert strip_think("a<think>x</think>b<think>y</think>c") == "abc"
 
 
-# ---------------------------------------------------------------- scorers
 
 def test_scorers():
     assert score_contains("the total is 88", "88") == 1.0
@@ -242,7 +238,6 @@ def test_json_field_matches_number_formats():
     assert not _values_match("abc", "abd")
 
 
-# ---------------------------------------------------------------- recipes
 
 def _valid_recipe(tmp_path):
     return {
@@ -310,7 +305,6 @@ def test_example_recipes_validate():
         assert recipe["strata"]
 
 
-# ---------------------------------------------------------------- distillation
 
 def test_distillation_loss_flows_and_zeroes():
     from stratum.distill import distillation_loss
