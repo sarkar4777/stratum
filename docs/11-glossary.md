@@ -22,6 +22,8 @@
 
 **Corpus** - An organization's pile of real documents and images - the raw material the corpus pipeline (doc 14) turns into training data.
 
+**CUDA** - NVIDIA's compute platform, the way PyTorch talks to NVIDIA GPUs. "CUDA available" means PyTorch can see and use your NVIDIA card - and a CPU-only PyTorch build reports it false even with a card present (doc 13 has the fix).
+
 **DARE** - A merge method that randomly drops most of each stratum's small adjustments and rescales the rest, reducing crosstalk when fusing many strata. From Yu et al. (2023). STRATUM seeds the randomness so the same merge always gives the same model.
 
 **Delta** - A stratum's weight adjustment, `scaling x (B @ A)`, added onto a base weight during merging.
@@ -79,6 +81,8 @@
 **Merge / fuse** - Combining strata into one model by (weighted) addition of their deltas.
 
 **Momentum** - A smoothed average of a parameter's recent gradients. The single note Muon keeps.
+
+**MPS (Metal Performance Shaders)** - How PyTorch uses the GPU built into Apple silicon Macs. STRATUM picks it up automatically when there is no CUDA device.
 
 **Muon (MomentUm Orthogonalized by Newton-schulz)** - STRATUM's optimizer for weight matrices. Rebalances each matrix's update so every direction shares (orthogonalization) and keeps one note per parameter - half AdamW's optimizer memory, with a step advantage that grows with model size (doc 4's race).
 

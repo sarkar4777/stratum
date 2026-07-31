@@ -24,7 +24,7 @@ pip install bitsandbytes # for 4-bit / QLoRA, if you have an NVIDIA GPU
 stratum doctor
 ```
 
-`doctor` reports your GPU/VRAM and recommends a base model. Use its recommendation for `--base`. When unsure, start smaller - it proves your pipeline before you scale.
+`doctor` reports your GPU/VRAM and recommends a base model - including catching the common trap where a CPU-only PyTorch build hides a perfectly good NVIDIA card (doc 13). Use its recommendation for `--base`. When unsure, start smaller - it proves your pipeline before you scale.
 
 Once you have a recipe (the one-command way at the end of this doc), `stratum plan recipe.yaml` goes further: it checks that *specific* build against this machine, suggests setting changes when it's tight, and writes a ready-to-run script for a rented GPU box when it doesn't fit at all (doc 10).
 
