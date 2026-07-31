@@ -395,9 +395,9 @@ def main():
     ci.add_argument("--in", dest="in_dir", required=True, help="folder of documents and images")
     ci.add_argument("--out", required=True, help="output folder for chunks.jsonl, manifest, and cache")
     ci.add_argument("--images", default="skip",
-                    choices=["skip", "hf", "anthropic", "openai", "echo"],
+                    choices=["skip", "hf", "anthropic", "openai", "gemini", "echo"],
                     help="vision teacher for image files. hf runs locally - "
-                         "anthropic/openai send every image to that API")
+                         "anthropic/openai/gemini send every image to that API")
     ci.add_argument("--vision-model", default=None,
                     help="vision model id for the chosen backend")
     ci.add_argument("--redact", action="store_true",
@@ -417,9 +417,12 @@ def main():
     cp.add_argument("--out", required=True, help="training JSONL (re-run to resume)")
     cp.add_argument("--test-out", default=None,
                     help="held-out test JSONL - required when --test-fraction > 0")
-    cp.add_argument("--teacher", default="hf", choices=["hf", "openai", "anthropic", "echo"],
-                    help="teacher backend. Note: openai/anthropic send every chunk "
-                         "to that API - use hf (local) for data that must not leave")
+    cp.add_argument("--teacher", default="hf",
+                    choices=["hf", "claude-cli", "openai", "anthropic", "gemini", "echo"],
+                    help="teacher backend. claude-cli uses your Claude Code "
+                         "subscription, no API key. Everything except hf/echo "
+                         "sends chunks to that provider - use hf for data "
+                         "that must not leave")
     cp.add_argument("--model", default=None, help="teacher model id for the chosen backend")
     cp.add_argument("--per-chunk", type=int, default=3, help="pairs to request per chunk")
     cp.add_argument("--max-chunks", type=int, default=None,
@@ -434,9 +437,12 @@ def main():
     tg.add_argument("--seeds", required=True, help="text file, one seed input per line")
     tg.add_argument("--instruction", required=True, help="what the skill should do, one line")
     tg.add_argument("--out", required=True, help="output training JSONL (re-run to resume)")
-    tg.add_argument("--teacher", default="hf", choices=["hf", "openai", "anthropic", "echo"],
-                    help="teacher backend. Note: openai/anthropic send every seed "
-                         "to that API - use hf (local) for data that must not leave")
+    tg.add_argument("--teacher", default="hf",
+                    choices=["hf", "claude-cli", "openai", "anthropic", "gemini", "echo"],
+                    help="teacher backend. claude-cli uses your Claude Code "
+                         "subscription, no API key. Everything except hf/echo "
+                         "sends seeds to that provider - use hf for data "
+                         "that must not leave")
     tg.add_argument("--model", default=None, help="teacher model name/id for the chosen backend")
     tg.set_defaults(func=cmd_teacher_gen)
 

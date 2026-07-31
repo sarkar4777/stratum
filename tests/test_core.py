@@ -381,8 +381,32 @@ def test_data_distillation_retries_flaky_teacher(tmp_path, monkeypatch):
 def test_teacher_backends():
     from stratum.teachers import get_teacher
     assert get_teacher("echo")("x").startswith("(echo")
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="claude-cli"):
         get_teacher("bogus")
+
+
+def test_claude_cli_teacher_needs_the_cli(monkeypatch):
+    import shutil
+    from stratum.teachers import get_teacher
+    monkeypatch.setattr(shutil, "which", lambda name: None)
+    with pytest.raises(EnvironmentError, match="Claude Code CLI"):
+        get_teacher("claude-cli")
+
+
+def test_gemini_teacher_needs_a_key(monkeypatch):
+    from stratum.teachers import get_teacher
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
+    with pytest.raises(EnvironmentError, match="GEMINI_API_KEY"):
+        get_teacher("gemini")
+
+
+def test_gemini_vision_teacher_needs_a_key(monkeypatch):
+    from stratum.vision import get_vision_teacher
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
+    with pytest.raises(EnvironmentError, match="GEMINI_API_KEY"):
+        get_vision_teacher("gemini")
 
 
 def test_model_hint():

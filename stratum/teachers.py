@@ -1,13 +1,20 @@
 """
 Teacher backends for data distillation (`stratum teacher-gen`).
 
-A "teacher" is any callable str -> str that answers a prompt well. STRATUM ships
-four backends and stays vendor-neutral so you can use whatever you have access to:
+A "teacher" is any callable str -> str that answers a prompt well. STRATUM
+stays vendor-neutral so you can use whatever you have access to:
 
-  hf a local Hugging Face model (downloaded from the Hub or a local path)
-  openai the OpenAI API (needs OPENAI_API_KEY and `pip install openai`)
-  anthropic the Anthropic API (needs ANTHROPIC_API_KEY and `pip install anthropic`)
-  echo a no-op teacher for testing the pipeline without any model
+  hf         a local Hugging Face model (from the Hub or a local path) -
+             nothing leaves your machine
+  claude-cli Claude through the installed Claude Code CLI - uses your Claude
+             subscription, no API key needed
+  openai     the OpenAI API (needs OPENAI_API_KEY and `pip install openai`)
+  anthropic  the Anthropic API (needs ANTHROPIC_API_KEY and `pip install anthropic`)
+  gemini     the Google Gemini API (needs GEMINI_API_KEY and `pip install google-genai`)
+  echo       a no-op teacher for testing the pipeline without any model
+
+Everything except hf and echo sends your data to that provider - for corpora
+that must stay in your environment, hf is the one to use.
 
 Every backend fails LOUDLY and CLEARLY if something is missing - a normal
 enterprise developer (Java/.NET/Python) should never be left guessing.
@@ -21,19 +28,84 @@ from __future__ import annotations
 import os
 
 
+TEACHER_BACKENDS = ("hf", "claude-cli", "openai", "anthropic", "gemini", "echo")
+
+
 def get_teacher(backend: str, model: str | None = None):
     """Return a callable str->str for the requested teacher backend."""
     backend = backend.lower()
     if backend == "hf":
         return _hf_teacher(model or "Qwen/Qwen3-4B")
+    if backend == "claude-cli":
+        return _claude_cli_teacher(model)
     if backend == "openai":
         return _openai_teacher(model or "gpt-4o-mini")
     if backend == "anthropic":
         return _anthropic_teacher(model or "claude-opus-5")
+    if backend == "gemini":
+        return _gemini_teacher(model or "gemini-2.5-flash")
     if backend == "echo":
         return lambda prompt: "(echo teacher - replace with a real backend)"
     raise ValueError(f"Unknown teacher backend '{backend}'. "
-                     f"Choose from: hf, openai, anthropic, echo.")
+                     f"Choose from: {', '.join(TEACHER_BACKENDS)}.")
+
+
+def _claude_cli_teacher(model_name: str | None):
+    """Claude through the Claude Code CLI, on your existing subscription.
+
+    No API key involved - each call runs `claude -p` as a subprocess, so
+    whatever plan the CLI is signed into pays for the tokens. Leave the model
+    unset to use the CLI's default, or pass --model to pick one.
+    """
+    import shutil
+    import subprocess
+
+    exe = shutil.which("claude")
+    if exe is None:
+        raise EnvironmentError(
+            "The claude-cli teacher needs the Claude Code CLI on PATH.\n"
+            " - Install it from https://claude.com/claude-code and sign in, or\n"
+            " - use --teacher anthropic with an API key, or --teacher hf for "
+            "a local model."
+        )
+
+    def teacher(prompt: str) -> str:
+        cmd = [exe, "-p", "--output-format", "text"]
+        if model_name:
+            cmd += ["--model", model_name]
+        result = subprocess.run(cmd, input=prompt, capture_output=True,
+                                text=True, encoding="utf-8", errors="replace",
+                                timeout=600)
+        if result.returncode != 0:
+            raise RuntimeError(
+                f"claude CLI returned {result.returncode}: "
+                f"{(result.stderr or result.stdout).strip()[:300]}")
+        return result.stdout
+
+    return teacher
+
+
+def _gemini_teacher(model_name: str):
+    """Google Gemini API as teacher. Needs GEMINI_API_KEY (or GOOGLE_API_KEY)
+    and `pip install google-genai`."""
+    if not (os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")):
+        raise EnvironmentError(
+            "GEMINI_API_KEY is not set. Export it first:\n"
+            " export GEMINI_API_KEY=...\n"
+            "Or use `--teacher hf` for a local model instead."
+        )
+    try:
+        from google import genai
+    except ImportError as e:
+        raise ImportError("pip install google-genai") from e
+
+    client = genai.Client()
+
+    def teacher(prompt: str) -> str:
+        resp = client.models.generate_content(model=model_name, contents=prompt)
+        return resp.text or ""
+
+    return teacher
 
 
 def _hf_teacher(model_name: str):

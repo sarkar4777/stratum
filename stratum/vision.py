@@ -48,10 +48,12 @@ def get_vision_teacher(backend: str, model: str | None = None,
         return _anthropic_vision_teacher(model or "claude-opus-5", instruction)
     if backend == "openai":
         return _openai_vision_teacher(model or "gpt-4o-mini", instruction)
+    if backend == "gemini":
+        return _gemini_vision_teacher(model or "gemini-2.5-flash", instruction)
     if backend == "echo":
         return lambda path: f"(echo vision teacher - contents of {Path(path).name})"
     raise ValueError(f"Unknown vision backend '{backend}'. "
-                     f"Choose from: hf, anthropic, openai, echo.")
+                     f"Choose from: hf, anthropic, openai, gemini, echo.")
 
 
 def _hf_vision_teacher(model_name: str, instruction: str):
@@ -135,6 +137,33 @@ def _anthropic_vision_teacher(model_name: str, instruction: str):
         if resp.stop_reason == "refusal":
             raise RuntimeError(f"the API declined to describe {image_path}")
         return "".join(b.text for b in resp.content if b.type == "text")
+
+    return teacher
+
+
+def _gemini_vision_teacher(model_name: str, instruction: str):
+    """Google Gemini API as vision teacher. Sends every image to the API - do
+    not use for images that must stay in your environment."""
+    if not (os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")):
+        raise EnvironmentError(
+            "GEMINI_API_KEY is not set. Export it first, or use "
+            "--images hf for a local vision model instead."
+        )
+    try:
+        from google import genai
+        from google.genai import types
+    except ImportError as e:
+        raise ImportError("pip install google-genai") from e
+
+    client = genai.Client()
+
+    def teacher(image_path: str) -> str:
+        mime = mimetypes.guess_type(image_path)[0] or "image/png"
+        part = types.Part.from_bytes(data=Path(image_path).read_bytes(),
+                                     mime_type=mime)
+        resp = client.models.generate_content(model=model_name,
+                                              contents=[part, instruction])
+        return resp.text or ""
 
     return teacher
 

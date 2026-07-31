@@ -123,7 +123,7 @@ stratum teacher-gen --seeds seeds.txt \
 
 Provider model names age quickly - check your provider's current model list and pass `--model` explicitly rather than trusting an example or a built-in default to stay current.
 
-STRATUM asks the teacher for each seed and writes a `{"prompt","response"}` JSONL. The four teacher backends are `hf` (local model), `openai`, `anthropic`, and `echo` (a no-op for testing the pipeline).
+STRATUM asks the teacher for each seed and writes a `{"prompt","response"}` JSONL. Six teacher backends ship: `hf` (a local model - nothing leaves your machine), `claude-cli` (Claude through the installed Claude Code CLI, billed to your existing subscription with no API key), `openai`, `anthropic`, and `gemini` (the respective APIs, each needing its key), and `echo` (a no-op for testing the pipeline).
 
 Three details matter when you scale this to thousands of seeds:
 
@@ -192,7 +192,7 @@ You don't need to memorize this - but now you can read it and explain it. That's
 ## The honest caveats
 
 - **The student can't exceed the teacher** on the distilled skill - it's imitating. If the teacher is wrong, the student learns the mistake. Use a teacher genuinely better than your student.
-- **An API teacher sees your seed inputs.** Every seed you feed `teacher-gen` with `--teacher openai` or `--teacher anthropic` is sent to that provider. If the seeds are client documents, tickets, or anything under a data-residency requirement, that transfer may itself be a compliance violation - use a **local** teacher (`--teacher hf`) so nothing leaves your environment, which is the whole promise of doc 10's production loop.
+- **A remote teacher sees your seed inputs.** Every seed you feed `teacher-gen` with `--teacher claude-cli`, `openai`, `anthropic`, or `gemini` is sent to that provider. If the seeds are client documents, tickets, or anything under a data-residency requirement, that transfer may itself be a compliance violation - use a **local** teacher (`--teacher hf`) so nothing leaves your environment, which is the whole promise of doc 10's production loop.
 - **Data distillation inherits the teacher's licensing.** If you distill from a commercial API, check that its terms permit training a model on its outputs. This is a real legal consideration for industry work, not just a formality.
 - **Logit distillation needs a shared tokenizer.** Qwen-teacher to Llama-student won't work for logit distillation (their vocabularies differ) - use data distillation across families instead.
 
