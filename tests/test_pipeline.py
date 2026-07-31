@@ -48,6 +48,8 @@ def test_train_writes_adapter_and_card(two_strata, tiny_base):
         # The audit trail: exact data fingerprint and a build timestamp.
         assert len(card["skill_sha256"]) == 64
         assert card["created_utc"]
+        # Per-epoch checkpointing: the card records how far training got.
+        assert card["epochs_completed"] == card["epochs"]
 
 
 def test_extracted_delta_matches_factors(two_strata):

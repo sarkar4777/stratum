@@ -98,6 +98,10 @@ If you train with `--system "You are a precise assistant..."`, that instruction 
 | `--seed` | 42 | Same seed = same data order, init, and dropout. GPU math can still differ by a hair between runs and machines - identical *quality*, not always identical bits |
 | 4-bit | on (GPU) | QLoRA, to fit bigger bases, `--no-4bit` to disable |
 
+## Checkpoints: a killed run keeps its last epoch
+
+The adapter is saved after every epoch, not just at the end - it's only a few megabytes, and it means a run that dies (power, memory, or you stopping it) leaves the last completed epoch on disk as a usable stratum. The `stratum_card.json` records `epochs_completed` alongside the planned `epochs`, so you can always tell a partial artifact from a finished one.
+
 ## Reading a healthy run
 
 ```

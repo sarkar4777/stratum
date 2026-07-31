@@ -137,6 +137,41 @@ def train_tile(
     else:
         raise ValueError(f"Unknown optimizer '{optimizer}'. Use 'muon' or 'adamw'.")
 
+    out_path = Path(out_dir)
+    out_path.mkdir(parents=True, exist_ok=True)
+
+    def save_checkpoint(epochs_completed, loss_so_far):
+        # The adapter is a few megabytes, so saving after every epoch is
+        # nearly free - and it means a long run that gets killed (power, OOM,
+        # an impatient operator) leaves the last full epoch usable instead
+        # of nothing. On a slow CPU run this is the difference between
+        # losing an hour and losing nothing.
+        model.save_pretrained(str(out_path))
+        tokenizer.save_pretrained(str(out_path))
+        card = {
+            "stratum_name": out_path.name,
+            "base_model": base_model,
+            "rank": rank,
+            "lora_alpha": lora_alpha,
+            "optimizer": optimizer,
+            "lr": lr if optimizer == "muon" else adamw_lr,
+            "epochs": epochs,
+            "epochs_completed": epochs_completed,
+            "batch_size": batch_size,
+            "grad_accum": grad_accum,
+            "max_len": max_len,
+            "load_4bit": bool(load_4bit and "quantization_config" in model_kwargs),
+            "skill_file": skill_path,
+            "skill_sha256": file_sha256(skill_path),
+            "num_pairs": len(rows),
+            "final_loss": loss_so_far,
+            "seed": seed,
+            "created_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "stratum_version": 1,
+        }
+        (out_path / "stratum_card.json").write_text(json.dumps(card, indent=2),
+                                                    encoding="utf-8")
+
     # Training loop with gradient accumulation.
     t0 = time.time()
     final_loss = None
@@ -177,35 +212,10 @@ def train_tile(
 
         avg = total / max(n_steps, 1)
         final_loss = avg
+        save_checkpoint(epoch + 1, avg)
         print(f"epoch {epoch+1}/{epochs} avg loss {avg:.4f} "
-              f"({time.time()-t0:.0f}s elapsed)")
+              f"({time.time()-t0:.0f}s elapsed) - checkpoint saved")
 
-    # Save adapter + provenance card.
-    out = Path(out_dir)
-    out.mkdir(parents=True, exist_ok=True)
-    model.save_pretrained(str(out))
-    tokenizer.save_pretrained(str(out))
-    card = {
-        "stratum_name": out.name,
-        "base_model": base_model,
-        "rank": rank,
-        "lora_alpha": lora_alpha,
-        "optimizer": optimizer,
-        "lr": lr if optimizer == "muon" else adamw_lr,
-        "epochs": epochs,
-        "batch_size": batch_size,
-        "grad_accum": grad_accum,
-        "max_len": max_len,
-        "load_4bit": bool(load_4bit and "quantization_config" in model_kwargs),
-        "skill_file": skill_path,
-        "skill_sha256": file_sha256(skill_path),
-        "num_pairs": len(rows),
-        "final_loss": final_loss,
-        "seed": seed,
-        "created_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-        "stratum_version": 1,
-    }
-    (out / "stratum_card.json").write_text(json.dumps(card, indent=2), encoding="utf-8")
     print(f"\nStratum saved to {out_dir}")
     print(f" base: {base_model} rank: {rank} final loss: {final_loss:.4f}")
     return final_loss
