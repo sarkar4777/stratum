@@ -4,7 +4,7 @@
 
 ---
 
-## The one-sentence version
+## One-sentence version
 
 A language model is a machine that, given some text, predicts what text comes next. Everything else is that prediction, repeated.
 
@@ -38,7 +38,8 @@ Inside the model are billions of numbers called **parameters** (collectively the
 
 - "A 4-billion-parameter model" (**4B**) has four billion of these numbers.
 - The parameters *are* the knowledge. There's no parameter labeled "France fact" - knowledge is spread across billions of numbers no human reads directly.
-- Think of them as billions of tiny dials. Their combined setting determines every output. **Training sets the dials.**
+
+These docs call parameters **dials**, so pin the picture down now: a dial like the volume knob on a speaker - something with a current setting that you can turn up or down. Each parameter is one number, its value is the dial's current position, and changing the number is turning the dial. A model is billions of these knobs, and their combined positions determine every output. **Training is nothing more than turning the dials to better positions.** Whenever a later doc says dial, read parameter - same thing, friendlier word.
 
 ## The shape inside: layers, and the word "transformer"
 
@@ -46,7 +47,7 @@ Those billions of dials aren't a loose heap. They're organized into **layers**, 
 
 The specific stack design every model you'll touch uses is called a **transformer**. Its layers come in pairs of steps: an **attention** step, where each token looks back at the other tokens in the input to decide which ones matter for predicting what comes next, and a plain processing step of the multiply-through-grids kind. A model like Qwen3-1.7B is a few dozen of these layers stacked, and that's the whole architecture story you need for this project - STRATUM never modifies the design, it adjusts the dials inside the grids. When doc 3 attaches small adapters "to every linear grid," those grids are the ones inside these layers.
 
-## Training: the four-step loop
+## Training: four-step loop
 
 This loop is the foundation of the entire project. Learn it once.
 

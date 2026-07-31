@@ -26,6 +26,8 @@
 
 **Delta** - A stratum's weight adjustment, `scaling x (B @ A)`, added onto a base weight during merging.
 
+**Dial** - These docs' word for a parameter: one adjustable number inside the model, pictured as a volume knob with a current position. Turning a dial means changing that number. Training turns billions of them.
+
 **Distillation** - Training a small "student" model to imitate a large "teacher" model, so the student captures the teacher's skill cheaply. STRATUM supports data distillation (teacher writes the training pairs) and logit distillation (student matches the teacher's probability distribution).
 
 **Data distillation** - The simple flavor: a teacher model generates the training pairs, which then train a normal stratum. Works with any teacher, including closed APIs.
