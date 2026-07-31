@@ -19,6 +19,7 @@ Backends mirror stratum.teachers:
              the right choice for regulated corpora
   anthropic  the Anthropic API - sends every image to the API
   openai     the OpenAI API - sends every image to the API
+  gemini     the Google Gemini API - sends every image to the API
   echo       a no-op for testing the pipeline without any model
 """
 from __future__ import annotations
@@ -80,7 +81,8 @@ def _hf_vision_teacher(model_name: str, instruction: str):
             f" - Out of memory: pick a smaller vision model.\n"
             f"Original error: {e}"
         ) from e
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    from .hf_utils import pick_device
+    device = pick_device()
     model.to(device).eval()
 
     def teacher(image_path: str) -> str:

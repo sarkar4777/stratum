@@ -137,7 +137,8 @@ def _hf_teacher(model_name: str):
             f"Original error: {e}"
         ) from e
 
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    from .hf_utils import pick_device
+    device = pick_device()
     model.to(device).eval()
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token

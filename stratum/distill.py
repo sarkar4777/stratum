@@ -209,7 +209,8 @@ def distill_tile(
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    from .hf_utils import pick_device
+    device = pick_device()
 
     # Teacher: frozen, eval mode. Optionally 4-bit - it is only read, so
     # quantizing it is nearly free and roughly quarters its memory.

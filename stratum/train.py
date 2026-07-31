@@ -111,7 +111,8 @@ def train_tile(
     model = get_peft_model(model, lora_cfg)
     model.print_trainable_parameters()
 
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    from .hf_utils import pick_device
+    device = pick_device()
     if "quantization_config" not in model_kwargs:
         model.to(device)
     model.train()

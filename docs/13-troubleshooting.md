@@ -13,6 +13,16 @@ First, `stratum plan recipe.yaml` - it estimates what each stratum needs on this
 3. `--max-len 512` if your pairs are short. Memory grows with sequence length.
 4. A smaller base. Run `stratum doctor` and use its recommendation. A pipeline proven on 0.6B scales to 4B later by changing one argument.
 
+## My GPU isn't being used
+
+The most common cause is not a missing GPU - it's the CPU-only build of PyTorch sitting in front of a perfectly good one. `stratum doctor` now checks for this: if the NVIDIA driver reports a card that PyTorch cannot see, it prints the fix. The command matters:
+
+```bash
+pip install --force-reinstall torch --index-url https://download.pytorch.org/whl/cu128
+```
+
+A plain `pip install torch` or `--upgrade` quietly keeps the CPU build, because pip considers the installed version already satisfied. On Apple silicon the GPU (MPS) is used automatically with the normal PyTorch install. AMD cards need the ROCm build on Linux and are not supported by PyTorch on Windows.
+
 ## `bitsandbytes` won't install or won't load
 
 4-bit (QLoRA) needs `bitsandbytes`, which needs an NVIDIA GPU. On Windows, recent versions install normally with `pip install bitsandbytes` - if an old pinned version fails, upgrade pip and retry. On Mac or CPU-only machines it isn't available: train in bf16 (`--no-4bit` makes this explicit) with a smaller base.

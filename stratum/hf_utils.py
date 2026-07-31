@@ -57,6 +57,50 @@ def check_hf_ready(verbose: bool = True) -> dict:
     return status
 
 
+def pick_device() -> str:
+    """The best device the installed PyTorch can actually use.
+
+    cuda (NVIDIA) first, then mps (Apple silicon), then cpu. Every training
+    and inference path calls this, so a Mac's GPU is used automatically
+    instead of silently falling back to CPU.
+    """
+    import torch
+
+    if torch.cuda.is_available():
+        return "cuda"
+    mps = getattr(torch.backends, "mps", None)
+    if mps is not None and mps.is_available():
+        return "mps"
+    return "cpu"
+
+
+def detect_hidden_nvidia_gpu() -> str | None:
+    """Spot an NVIDIA GPU that the installed PyTorch cannot see.
+
+    The single most common cause of "why is my GPU not being used" is a
+    perfectly good NVIDIA card sitting behind a CPU-only PyTorch build -
+    torch.cuda.is_available() says False and everything silently runs slow.
+    This asks the driver directly (nvidia-smi) so doctor can tell the user
+    the actual fix instead of "no GPU".
+    """
+    import shutil
+    import subprocess
+
+    exe = shutil.which("nvidia-smi")
+    if exe is None:
+        return None
+    try:
+        result = subprocess.run(
+            [exe, "--query-gpu=name", "--format=csv,noheader"],
+            capture_output=True, text=True, timeout=15)
+    except Exception:
+        return None
+    if result.returncode != 0:
+        return None
+    name = result.stdout.strip().splitlines()
+    return name[0].strip() if name else None
+
+
 def load_for_inference(model_dir: str):
     """Load a model directory for generation, whatever kind it is.
 

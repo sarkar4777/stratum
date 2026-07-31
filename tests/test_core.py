@@ -409,6 +409,34 @@ def test_gemini_vision_teacher_needs_a_key(monkeypatch):
         get_vision_teacher("gemini")
 
 
+def test_pick_device_prefers_cuda_then_mps(monkeypatch):
+    import torch
+    from stratum.hf_utils import pick_device
+
+    class FakeMps:
+        def __init__(self, available):
+            self._a = available
+        def is_available(self):
+            return self._a
+
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+    assert pick_device() == "cuda"
+
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
+    monkeypatch.setattr(torch.backends, "mps", FakeMps(True), raising=False)
+    assert pick_device() == "mps"
+
+    monkeypatch.setattr(torch.backends, "mps", FakeMps(False), raising=False)
+    assert pick_device() == "cpu"
+
+
+def test_hidden_gpu_detection_survives_missing_nvidia_smi(monkeypatch):
+    import shutil
+    from stratum.hf_utils import detect_hidden_nvidia_gpu
+    monkeypatch.setattr(shutil, "which", lambda name: None)
+    assert detect_hidden_nvidia_gpu() is None
+
+
 def test_model_hint():
     from stratum.hf_utils import resolve_model_hint
     assert resolve_model_hint("qwen3")  # bad id gives a nonempty hint

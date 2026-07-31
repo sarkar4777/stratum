@@ -47,8 +47,30 @@ def cmd_doctor(args):
         except Exception:
             print("4-bit (QLoRA): NOT installed. `pip install bitsandbytes` to fit bigger models.")
     else:
-        print("No CUDA GPU. CPU training works but is slow.")
-        print("\nRecommended base: Qwen3-0.6B, small datasets, patience.")
+        import shutil
+        from .hf_utils import detect_hidden_nvidia_gpu, pick_device
+        hidden = detect_hidden_nvidia_gpu()
+        if hidden:
+            print(f"PyTorch cannot see a GPU - but this machine has one: {hidden}.")
+            print("The installed PyTorch is the CPU-only build. Fix it with:")
+            print("  pip install --force-reinstall torch --index-url https://download.pytorch.org/whl/cu128")
+            print("(--force-reinstall matters: a plain install or --upgrade keeps")
+            print(" the CPU build, because pip considers it already satisfied.)")
+            print("Then re-run `stratum doctor` - training will be many times faster.")
+        elif pick_device() == "mps":
+            print("Apple GPU (MPS) detected - training and inference use it "
+                  "automatically.")
+            print("\nRecommended base: Qwen3-1.7B. 4-bit (bitsandbytes) is "
+                  "NVIDIA-only, so pick a base that fits in memory as bf16.")
+        elif shutil.which("rocm-smi"):
+            print("An AMD GPU with ROCm tools was found, but this PyTorch "
+                  "build cannot use it.")
+            print("On Linux, install the ROCm build of PyTorch (see "
+                  "pytorch.org for the current command). On Windows, PyTorch "
+                  "has no AMD support - training runs on CPU.")
+        else:
+            print("No usable GPU found. CPU training works but is slow.")
+            print("\nRecommended base: Qwen3-0.6B, small datasets, patience.")
 
     print()
     from .hf_utils import check_hf_ready
@@ -93,8 +115,9 @@ def cmd_chat(args):
     from .data import format_messages, strip_think
     from .hf_utils import load_for_inference
 
+    from .hf_utils import pick_device
     model, tokenizer = load_for_inference(args.model)
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    device = pick_device()
     model.to(device).eval()
 
     # The conversation so far. Each turn is fed back in, so the model sees

@@ -113,7 +113,8 @@ def run_eval(model_dir: str, test_path: str, scorer: str = "contains",
         raise ValueError(f"Unknown scorer '{scorer}'. Choose from {list(SCORERS)}.")
     score_fn = SCORERS[scorer]
     rows = load_jsonl(test_path, required_keys=("prompt", "expected"))
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    from .hf_utils import pick_device
+    device = pick_device()
 
     def eval_one_model(model_source):
         from .hf_utils import load_for_inference
