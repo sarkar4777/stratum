@@ -30,7 +30,7 @@ Once you have a recipe (the one-command way at the end of this doc), `stratum pl
 
 ## Step 2 - prepare skill data
 
-Each skill is a JSONL file, one `{"prompt","response"}` per line. See `examples/`. Quality rules:
+Each skill is a JSONL file, one `{"prompt","response"}` per line. See `examples/`. Starting from a pile of real documents instead of ready-made pairs? That's the corpus pipeline - doc 14 - which ends exactly here, with skill files. Quality rules:
 - Be format-consistent - if you want JSON, make every response valid JSON.
 - Cover the variety you expect at runtime, including hard cases.
 - 100-500 pairs per skill is a fine start.

@@ -238,6 +238,6 @@ print("not just its answer. That's why distillation softens before matching.\n")
 
 print(LINE)
 print("Three ideas: balanced updates (Muon), low-rank tiles (LoRA),")
-print("additive fusing (merge). That's the whole project - and now")
-print("you've seen every major claim about them measured, not asserted.")
+print("additive fusing (merge). That's the whole project - and every")
+print("claim above just ran on your own machine.")
 print(LINE)

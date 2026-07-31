@@ -88,6 +88,22 @@ You already know how to build systems. What's new here isn't engineering discipl
 
 **Say it in a meeting:** "The loss mask scopes training to the output, like asserting only on the fields that matter."
 
+## The corpus pipeline = an ETL job
+
+**What it is:** `stratum corpus` extracts text from real documents, deduplicates, chunks, and has a teacher generate training pairs (doc 14).
+
+**You already know this as:** Extract, transform, load. Same discipline too: idempotent re-runs (content-hash caching), per-record error isolation (one corrupt file doesn't kill the batch), and a manifest you can audit. If you've built a data pipeline, you've built this.
+
+**Say it in a meeting:** "The corpus step is an ETL job with caching and provenance. Re-runs are incremental and failures are per-file."
+
+## RAG vs fine-tuning = runtime lookup vs compiled-in constants
+
+**What it is:** Retrieval fetches document passages at question time. Fine-tuning bakes behavior into the weights.
+
+**You already know this as:** Reading config from the database at request time versus hard-coding values at compile time. You'd never recompile to change a price, and you'd never do a database round-trip for string-formatting logic. Facts change and need sources - look them up (RAG). Behavior is stable and needs speed - compile it in (fine-tune).
+
+**Say it in a meeting:** "Retrieval is the runtime lookup for facts, the fine-tuned model is the compiled behavior. We need both, and doc 14 is where we draw the line."
+
 ## Evaluation = your test suite, with a held-out set
 
 **What it is:** Score the model on data it never trained on.

@@ -1,12 +1,12 @@
 # 14 - From a corpus to a model
 
-*The enterprise scenario: an organization has thousands of documents - PDFs, Word files, slide decks, spreadsheets, web pages, images - and wants "an SLM built from all of this." This doc is the straight answer to that request: what a model can actually learn from a corpus, what belongs in retrieval instead, and the pipeline that takes a raw folder to a trained, tested model.*
+*The enterprise scenario: an organization has thousands of documents - PDFs, Word files, slide decks, spreadsheets, web pages, images - and wants "an SLM built from all of this." What a model can learn from a corpus, what belongs in retrieval instead, and the pipeline from a raw folder to a trained, tested model.*
 
 ---
 
-## First, the honest sentence that saves the project
+## Start with what fine-tuning can and cannot do
 
-**Fine-tuning is not memory.** Training a model on your documents teaches it *behaviors* reliably - your terminology, your formats, how to extract, classify, and answer in your domain's voice. It teaches *facts* unreliably: a model fine-tuned on ten thousand pages will still misremember clause numbers, blend similar documents together, and confidently state things that were true in the 2019 revision. And it cannot cite its source or pick up last week's amendment without retraining.
+Fine-tuning is not memory. Training a model on your documents teaches it *behaviors* reliably - your terminology, your formats, how to extract, classify, and answer in your domain's voice. It teaches *facts* unreliably: a model fine-tuned on ten thousand pages will still misremember clause numbers, blend similar documents together, and confidently state things that were true in the 2019 revision. And it cannot cite its source or pick up last week's amendment without retraining.
 
 So "make the model know our documents" decomposes into two different jobs:
 
@@ -17,7 +17,7 @@ So "make the model know our documents" decomposes into two different jobs:
 
 **RAG** (retrieval-augmented generation) means: store the documents in a search index, and when a question comes in, find the most relevant passages and paste them into the model's prompt so it answers from what is in front of it. The model provides comprehension and language - the index provides the facts. STRATUM does not ship a retrieval stack (any standard one works, running in your environment), but the model STRATUM builds is exactly the model you want behind one: small, cheap to serve, and trained to handle *your* documents' style of content.
 
-The architecture that wins this engagement is therefore **both**: a retrieval layer for knowledge, and a STRATUM-built SLM for skills - trained, as it happens, from the same corpus. The rest of this doc is the pipeline that does the second part.
+So the setup that works for this kind of engagement is **both**: a retrieval layer for the knowledge, and a STRATUM-built SLM for the skills - trained from the same corpus. The rest of this doc is the pipeline that does the second part.
 
 ## The pipeline at a glance
 
@@ -47,9 +47,9 @@ What happens, in order, for every file in the folder tree:
 
 - **Extraction.** Text comes out of PDF, Word, PowerPoint (slides, tables, speaker notes), Excel (all sheets), HTML (scripts and styles stripped), and plain text and Markdown. This step is often called **document parsing** or, for scanned images of text, **OCR** (optical character recognition - software that reads pictures of text). A scanned PDF with no text layer gets a clear error telling you to route it through the image path below.
 - **Deduplication.** Files are fingerprinted by content (SHA-256). The same document saved under five names is ingested once - real corpora are full of copies, and duplicates would both waste teacher calls and skew training.
-- **Redaction** (with `--redact`). A baseline scrub replaces emails, phone numbers, and card-like numbers. Read that sentence carefully: *baseline*. Names, addresses, well IDs, customer references - anything domain-specific - need the organization's own rules. A regulated deployment runs its own **PII** (personally identifiable information) pipeline before ingest and treats this flag as a second net, not the net.
+- **Redaction** (with `--redact`). A baseline scrub replaces emails, phone numbers, and card-like numbers. Baseline is the operative word - names, addresses, well IDs, customer references, anything domain-specific, all need the organization's own rules. A regulated deployment runs its own **PII** (personally identifiable information) pipeline before ingest and treats this flag as a second net, not the net.
 - **Chunking.** Long documents are cut into overlapping windows of about 2,400 characters, cut at paragraph boundaries where possible. A **chunk** is the unit the next step's teacher can actually read and reason about - a whole manual is too much, a sentence too little. The overlap means a fact straddling a cut survives intact in at least one chunk.
-- **Caching and resume.** Every file's extracted text is cached under `corpus/cache/` keyed by its content hash. Re-run the command after adding files, fixing a corrupt one, or a crash, and only the new work happens. On a corpus of thousands of files this is the difference between a pipeline and a prayer.
+- **Caching and resume.** Every file's extracted text is cached under `corpus/cache/` keyed by its content hash. Re-run the command after adding files, fixing a corrupt one, or a crash, and only the new work happens. This is what makes a corpus of thousands of files workable in practice.
 - **The manifest.** `corpus/manifest.jsonl` records every file: its hash, its status (ok, duplicate, skipped, error), the reason for any failure, and what redaction removed. For a regulated client this is the ingest audit trail, machine-readable, sitting next to the stratum cards.
 
 ## Step 2 - images
@@ -65,7 +65,7 @@ stratum corpus ingest --in /data/company-docs --out corpus/ \
 
 A **vision-language model** (VLM) is a model that reads images the way a language model reads text. Used as a teacher here, it writes down everything in each image - transcribed text, table contents, what a diagram shows - and that text flows through chunking and pair generation like any document. The extraction is cached per image hash, so the expensive vision pass is a one-time cost. API backends exist too (`--images anthropic`, `--images openai`) with the same warning as every API teacher: **every image is sent to that provider**, which for most regulated corpora is disqualifying - use the local model.
 
-**Now the honest boundary, stated plainly.** This route bakes the images' *content* into the training data, and it is the right call for "our knowledge includes what's in these diagrams." What it does not produce is a model that can *look at a new image* in production - the finished SLM is a text model. A model that sees images at inference time is a vision-language model fine-tune: a genuinely different training pipeline (different model classes, image processing, memory profile) that STRATUM does not currently implement. That is a roadmap item, and anyone who tells you it's a flag on the existing pipeline is selling something. If the client's use case requires image input at inference time, plan a VLM behind the same RAG layer and use STRATUM for the text skills beside it.
+**One boundary to be clear about with the client.** This route bakes the images' *content* into the training data, and it is the right call for "our knowledge includes what's in these diagrams." What it does not produce is a model that can *look at a new image* in production - the finished SLM is a text model. A model that sees images at inference time means fine-tuning a vision-language model, which is a different training pipeline (different model classes, image processing, memory profile) that STRATUM does not currently implement. It is a roadmap item, and considerably more work than a flag on the existing commands. If the client's use case requires image input at inference time, plan a VLM behind the same RAG layer and use STRATUM for the text skills beside it.
 
 ## Step 3 - pairs: a teacher writes the training data
 
@@ -107,19 +107,19 @@ evals:
 
 ## What remains the client's, and yours
 
-Complete honesty about the edges of what this project does:
+The edges of what this project covers, so nobody finds them mid-engagement:
 
 - **The retrieval stack** - index, embedding model, serving glue - is standard infrastructure STRATUM doesn't ship. It runs in the client's environment beside the model.
 - **Compliance-grade PII handling** is the client's pipeline, run before ingest. `--redact` is a second net.
 - **Expert review of generated pairs** is not optional at enterprise stakes. Teachers write plausible pairs at scale, and a domain expert sampling them (the provenance fields say where each came from) is what turns plausible into trusted. Budget for it.
-- **A model that accepts images at inference time** is a VLM fine-tune - roadmap, not present tense.
+- **A model that accepts images at inference time** means fine-tuning a VLM - still on the roadmap.
 - **OCR for scanned paper** at serious volume deserves a dedicated OCR pass feeding the ingest folder - the vision-teacher route works, but purpose-built OCR is faster and cheaper for pure text pages.
 
 ## What you now know
 
 - "Build an SLM from our corpus" splits into **knowledge** (retrieval's job) and **skills** (fine-tuning's job) - the winning architecture uses both, and now you can explain why to a client.
-- `stratum corpus ingest` turns a folder of mixed real-world documents and images into clean, deduplicated, provenance-carrying chunks - cached, resumable, and audit-friendly at thousands-of-files scale.
-- `stratum corpus pairs` turns chunks into grounded training pairs with a leak-proof held-out split, one run per skill.
-- Images contribute their **content** today via a local vision teacher - a model that **sees** at inference time is a different pipeline, stated plainly as roadmap.
+- `stratum corpus ingest` turns a folder of mixed real-world documents and images into clean, deduplicated chunks that remember where they came from, with caching and a manifest that hold up at thousands of files.
+- `stratum corpus pairs` turns chunks into grounded training pairs plus a held-out test set that cannot leak into training, one run per skill.
+- Images contribute their **content** today via a local vision teacher. A model that **sees** at inference time is a different pipeline, and still on the roadmap.
 
 Next: [the glossary ->](11-glossary.md), or back to [the production loop ->](10-scaling-and-production.md)

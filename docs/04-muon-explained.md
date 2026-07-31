@@ -102,7 +102,7 @@ opts = [Muon(muon_params, lr=2e-2), torch.optim.AdamW(adamw_params, lr=1e-3)]
 
 ## Watch them race
 
-Claims are cheap, so the demo races all three optimizers on the same task: teach a small **two-layer network** to imitate a "teacher" network, from noisy minibatches - a miniature of real training. (A network **layer** is one grid of dials followed by a simple squashing function, and layers stack: the output of one feeds the next. Two layers is the smallest network with real depth. Doc 0 covers this.) Every optimizer gets a sweep over learning rates and races at its own best setting, with the same decaying step size, so nobody wins by tuning luck. The finish line: test error down to 5% of its starting value.
+The demo backs this up by racing all three optimizers on the same task: teach a small **two-layer network** to imitate a "teacher" network, from noisy minibatches - a miniature of real training. (A network **layer** is one grid of dials followed by a simple squashing function, and layers stack: the output of one feeds the next. Two layers is the smallest network with real depth. Doc 0 covers this.) Every optimizer gets a sweep over learning rates and races at its own best setting, with the same decaying step size, so nobody wins by tuning luck. The finish line: test error down to 5% of its starting value.
 
 From `python scripts/demo_concepts.py`:
 
@@ -121,12 +121,12 @@ xychart-beta
     bar [124, 132, 235]
 ```
 
-Read it honestly, because this is the part most write-ups fudge:
+What to take from it:
 
 - **SGD trails badly** - one shared step size for every dial really does cost you.
-- **Muon and AdamW arrive together** at this toy size. That's the truth at small scale: both are good optimizers, and you should not expect Muon to demolish AdamW on a laptop-sized problem.
+- **Muon and AdamW arrive together** at this toy size. Both are good optimizers, and on a laptop-sized problem Muon has no dramatic edge - don't expect one.
 - **Muon does it with half the optimizer memory** - one note per dial against AdamW's two. That advantage holds at every scale, and it's the one doc 1's memory table is built on.
-- Muon's **fewer-steps** advantage is a scale phenomenon: it compounds on the big, structured weight grids of real language models (where it was proven), not on toy problems. At STRATUM's scale you get AdamW-class quality for half the optimizer memory - which is exactly why `--optimizer adamw` remains a first-class choice, not a fallback.
+- Muon's **fewer-steps** advantage is a scale phenomenon: it compounds on the big, structured weight grids of real language models (where it was proven), not on toy problems. At STRATUM's scale you get AdamW-class quality for half the optimizer memory, and `--optimizer adamw` remains a first-class choice rather than a fallback.
 
 ## What you now know
 

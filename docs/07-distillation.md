@@ -31,7 +31,7 @@ Training the student to match the teacher's whole distribution (called the **sof
 
 ## Watch temperature work
 
-Distillation has one knob that sounds mystical and isn't: **temperature**. Why do we need it at all? Because a confident teacher hides its own judgment: the near-miss answers sit at probabilities so small that when the student is trained to match the distribution, they contribute almost nothing - the student ends up learning little more than the hard label. Temperature fixes that: divide the teacher's raw scores (the logits) by a number T greater than 1 before turning them into probabilities, and the distribution flattens - the near-misses become large enough to teach from. The demo shows exactly what that does to the ticket example above (`python scripts/demo_concepts.py`, demo 6):
+One knob is left to explain: **temperature**. Why do we need it at all? Because a confident teacher hides its own judgment: the near-miss answers sit at probabilities so small that when the student is trained to match the distribution, they contribute almost nothing - the student ends up learning little more than the hard label. Temperature fixes that: divide the teacher's raw scores (the logits) by a number T greater than 1 before turning them into probabilities, and the distribution flattens - the near-misses become large enough to teach from. The demo shows what that does to the ticket example above (`python scripts/demo_concepts.py`, demo 6):
 
 ```
                       T=1      T=2      T=4
@@ -41,7 +41,7 @@ Distillation has one knob that sounds mystical and isn't: **temperature**. Why d
           how_to    2.3%    9.3%   16.2%
 ```
 
-Same teacher, same scores. At T=1 the runner-up is barely visible - the student would learn little more than the hard label. At T=2 the near-miss is a quarter of the distribution: the student can now *see* that account_access was plausible, which is the judgment we wanted to transfer. Push too far (T=4) and everything blurs toward uniform, teaching the student that even nonsense options were half-reasonable. That's the whole tradeoff behind `--temperature`, and why 2.0 is the default.
+Same teacher, same scores. At T=1 the runner-up is barely visible - the student would learn little more than the hard label. At T=2 the near-miss is a quarter of the distribution: the student can now *see* that account_access was plausible, which is the judgment we wanted to transfer. Push too far (T=4) and everything blurs toward uniform, teaching the student that even the nonsense options were half-reasonable. The default of 2.0 sits between those two failure modes.
 
 ## Two ways to distill (STRATUM supports both)
 

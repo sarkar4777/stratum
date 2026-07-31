@@ -94,7 +94,7 @@ stratum eval models/my-slm --test examples/test-extract.jsonl \
   --scorer json_field --json-out reports/extract.json --min-score 0.8
 ```
 
-`--json-out` writes the full report (mean, per-skill scores, every prompt and output) as JSON for dashboards or diffing. `--min-score` makes the command exit non-zero when the score falls below the bar, which is exactly what a CI pipeline needs to block a bad build. Doc 10 shows where this fits in a production loop.
+`--json-out` writes the full report (mean, per-skill scores, every prompt and output) as JSON for dashboards or diffing. `--min-score` makes the command exit non-zero when the score falls below the bar, so a CI pipeline can block a bad build on it. Doc 10 shows where this fits in a production loop.
 
 ## Guard against over-specialization
 
