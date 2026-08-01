@@ -200,9 +200,10 @@ def test_make_batches_pads_and_masks():
 def test_training_data_check_flags_short_responses(capsys):
     from stratum.data import check_training_data
     tok = FakeTok()
-    terse = [{"prompt": "What is the share?", "response": "32%"}] * 4
+    terse = [{"prompt": "What is the share?", "response": "5"}] * 4
     stats = check_training_data(tok, terse, None, 128)
     assert stats["pairs"] == 4
+    assert stats["median_response_tokens"] <= 8
     warning = capsys.readouterr().out
     assert "very short" in warning      # the collapse risk
     assert "below the" in warning       # and the thin-dataset note
