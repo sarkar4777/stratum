@@ -129,6 +129,14 @@ The edges of what this project covers, so nobody finds them mid-engagement:
 - **A model that accepts images at inference time** means fine-tuning a VLM - still on the roadmap.
 - **OCR for scanned paper** at serious volume deserves a dedicated OCR pass feeding the ingest folder - the vision-teacher route works, but purpose-built OCR is faster and cheaper for pure text pages.
 
+## A worked example you can run
+
+`examples/energy/` is this entire doc executed against a public corpus - eleven
+documents fetched from the web, three skills taught by two different teachers,
+merged and gated, with every command and the measured before/after numbers. It
+also records the two failures the build hit and how they were fixed, which is
+usually the more useful half.
+
 ## What you now know
 
 - "Build an SLM from our corpus" splits into **knowledge** (retrieval's job) and **skills** (fine-tuning's job) - the winning architecture uses both, and now you can explain why to a client.

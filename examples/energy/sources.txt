@@ -1,0 +1,14 @@
+# Energy-sector corpus sources
+# Wikipedia (CC BY-SA) via the clean-HTML REST API
+https://en.wikipedia.org/api/rest_v1/page/html/Gas_turbine
+https://en.wikipedia.org/api/rest_v1/page/html/Pipeline_transport
+https://en.wikipedia.org/api/rest_v1/page/html/Liquefied_natural_gas
+https://en.wikipedia.org/api/rest_v1/page/html/Electrical_grid
+https://en.wikipedia.org/api/rest_v1/page/html/Combined_cycle_power_plant
+https://en.wikipedia.org/api/rest_v1/page/html/Oil_refinery
+https://en.wikipedia.org/api/rest_v1/page/html/Wind_turbine
+https://en.wikipedia.org/api/rest_v1/page/html/Electrical_substation
+https://en.wikipedia.org/api/rest_v1/page/html/Petroleum_reservoir
+https://en.wikipedia.org/api/rest_v1/page/html/Base_load
+# US EIA Annual Energy Outlook narrative (public domain)
+https://www.eia.gov/outlooks/aeo/pdf/AEO2023_Narrative.pdf

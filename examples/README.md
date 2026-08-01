@@ -16,6 +16,7 @@ same shape and everything else stays identical.
 | `seeds.txt` | Raw inputs for `stratum teacher-gen`, one per line |
 | `recipe.yaml` | A complete build: two strata, a merge, and eval gates |
 | `recipe-distill.yaml` | The same build with one stratum distilled from a bigger teacher |
+| `energy/` | A complete reference build: public web corpus in, tested SLM out, with the commands and measured results |
 
 Building your own skill data:
 

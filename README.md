@@ -125,6 +125,8 @@ Each stratum is trained on its own, one at a time, so you never hold more than o
 | 13 | [Troubleshooting](docs/13-troubleshooting.md) | The problems people actually hit, with fixes |
 | 14 | [From a corpus to a model](docs/14-from-corpus-to-model.md) | Thousands of real documents and images in, tested SLM out - and the RAG boundary |
 
+A complete worked example lives in [`examples/energy/`](examples/energy/): a public web corpus turned into a tested energy-sector SLM, with every command, the measured gains over the base model, and the two failures the build hit on the way.
+
 ## Built for industry-specific models
 
 STRATUM suits real domain deployments because a production model usually needs several distinct skills, and modeling each as a stratum gives you:

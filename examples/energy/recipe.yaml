@@ -1,0 +1,48 @@
+# Energy-sector SLM built from a public web corpus. Sized for an 8 GB NVIDIA
+# GPU - the whole build takes a couple of minutes there.
+#
+# Three skills, deliberately taught by different teachers: grounded Q&A by a
+# local Qwen3-0.6B, extraction and explanations by Claude through the
+# claude-cli backend. See README.md in this folder for the commands and the
+# measured results.
+#
+#   stratum plan examples/energy/recipe.yaml
+#   stratum stack examples/energy/recipe.yaml
+base_model: Qwen/Qwen3-1.7B
+optimizer: muon
+load_4bit: true
+batch_size: 4
+grad_accum: 4
+max_len: 512
+
+strata:
+  - name: energy-qa
+    skill: data/energy-qa.jsonl
+    out: strata/energy-qa
+    rank: 16
+    epochs: 3
+  - name: energy-extract
+    skill: data/energy-extract.jsonl
+    out: strata/energy-extract
+    rank: 16
+    epochs: 3
+  - name: energy-explain
+    skill: data/energy-explain.jsonl
+    out: strata/energy-explain
+    rank: 16
+    epochs: 3
+
+merge:
+  method: linear
+  weights: [1.0, 1.0, 1.0]
+  normalize: true # three full-strength strata - average, do not sum (doc 5)
+
+output_model: models/energy-slm
+
+evals:
+  - test: data/energy-qa-test.jsonl
+    scorer: overlap # free-text answers paraphrase - contains cannot score them
+    min_score: 0.2
+  - test: data/energy-extract-test.jsonl
+    scorer: overlap
+    min_score: 0.2

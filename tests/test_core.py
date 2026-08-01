@@ -344,9 +344,28 @@ def test_recipe_setting_fallback():
 def test_example_recipes_validate():
     from stratum.recipe import load_recipe
     root = os.path.join(os.path.dirname(__file__), "..", "examples")
-    for name in ("recipe.yaml", "recipe-distill.yaml"):
+    for name in ("recipe.yaml", "recipe-distill.yaml", "energy/recipe.yaml"):
         recipe = load_recipe(os.path.join(root, name))
         assert recipe["strata"]
+
+
+def test_energy_reference_build_is_intact():
+    """The checked-in reference build must stay runnable - a broken example
+    is worse than none."""
+    from stratum.recipe import load_recipe
+    root = os.path.join(os.path.dirname(__file__), "..", "examples", "energy")
+
+    recipe = load_recipe(os.path.join(root, "recipe.yaml"))
+    assert recipe["merge"]["normalize"] is True   # three strata must average
+    assert len(recipe["evals"]) == 2
+    for gate in recipe["evals"]:
+        assert gate["scorer"] == "overlap"        # free text needs overlap
+
+    with open(os.path.join(root, "sources.txt"), encoding="utf-8") as f:
+        urls = [l.strip() for l in f
+                if l.strip() and not l.startswith("#")]
+    assert len(urls) >= 10
+    assert all(u.startswith("https://") for u in urls)
 
 
 
