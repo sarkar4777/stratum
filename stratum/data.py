@@ -161,6 +161,53 @@ def build_example(tokenizer, prompt, response, system, max_len):
     return input_ids, labels
 
 
+def check_training_data(tokenizer, rows, system, max_len, verbose=True) -> dict:
+    """Look at the data before training and report what will go wrong.
+
+    Two failure modes cost real GPU time and are invisible until you evaluate:
+
+    Very short responses. If most answers are a handful of tokens, the
+    end-of-sequence token dominates the loss and the model can learn to emit
+    it immediately - producing a stratum that answers every prompt with
+    nothing. Terse extraction data is exactly where this bites.
+
+    Too few pairs. Under about 50 examples a stratum memorizes rather than
+    generalizes, and the eval numbers that follow mean very little.
+
+    Returns the statistics and prints warnings with the fix. Never raises -
+    the user decides whether to proceed.
+    """
+    lengths = []
+    for r in rows:
+        ids, labels = build_example(tokenizer, r["prompt"], r["response"],
+                                    system, max_len)
+        lengths.append(sum(1 for l in labels if l != -100))
+    lengths.sort()
+    n = len(lengths)
+    median = lengths[n // 2]
+    stats = {"pairs": n, "median_response_tokens": median,
+             "shortest_response_tokens": lengths[0],
+             "longest_response_tokens": lengths[-1]}
+
+    if verbose:
+        print(f"Training data: {n} pairs, response length "
+              f"{lengths[0]}-{lengths[-1]} tokens (median {median})")
+        if median <= 8:
+            print(" WARNING: responses are very short. The end-of-sequence "
+                  "token can dominate\n"
+                  "  the loss and leave a stratum that answers with nothing at "
+                  "all. If that\n"
+                  "  happens: lower --lr (try 5e-3), use --epochs 1-2, or write "
+                  "answers as\n"
+                  "  short sentences rather than bare values. Always check with "
+                  "`stratum eval`.")
+        if n < 50:
+            print(f" NOTE: {n} pairs is below the ~100-500 a skill wants "
+                  f"(doc 10). Fine for\n"
+                  f"  proving the pipeline, thin for a real skill.")
+    return stats
+
+
 def make_batches(tokenizer, rows, system, max_len, batch_size):
     """Yield padded batches of (input_ids, attention_mask, labels) tensors."""
     pad_id = tokenizer.pad_token_id

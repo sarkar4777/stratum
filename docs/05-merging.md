@@ -106,6 +106,37 @@ The demo builds the failure on purpose so you can watch TIES fix it. Two strata,
 
 Linear adds everything, noise included, so each skill's signal arrives diluted by the other's noise. TIES trims each stratum to its strongest entries *before* anything is added, so the crosstalk never gets a vote. Run it yourself - `python scripts/demo_concepts.py`, demo 5 - and read the twenty lines that produce it: the trim-then-sign-vote there is the same logic as `merge_ties` in `stratum/merge.py`, minus the tensors.
 
+## Weights: sum or average
+
+Default weights are 1.0 each, which makes the merge a **sum**. That is right for two strata whose deltas are modest, and wrong the moment you fuse several strata that were each trained to full strength - their deltas add up and overshoot the base. The failure mode is not subtle degradation: the model can stop generating entirely, empty output on every prompt, with training losses that looked perfectly healthy.
+
+A real example from this project's own test build - three strata, each trained to convergence on a 1.7B base:
+
+```
+weights [1.0, 1.0, 1.0]     -> merged model produces nothing at all
+weights [0.34, 0.33, 0.33]  -> merged model answers normally
+```
+
+So for three or more strata, make it an **average**:
+
+```bash
+stratum merge strata/a strata/b strata/c --out models/mine --normalize
+```
+
+`--normalize` scales whatever weights you gave so they sum to 1, keeping their relative emphasis (`--weights 2 1 1 --normalize` becomes `0.5 0.25 0.25`). In a recipe it is `merge: normalize: true`.
+
+## The merge tells you when it went too far
+
+Every merge now measures how far it moves the base weights and prints it:
+
+```
+ weight shift: 4.2% average, 11.8% largest (how far the merge moves the base weights)
+```
+
+That number is the size of the combined delta relative to the weight it lands on. A healthy skill merge is a nudge of a few percent. Above roughly 25% on average, STRATUM prints a warning with the fixes in order, because that is the territory where models stop working. The figure is recorded in `stratum_merge.json` alongside the weights, so a build's history says not just what was fused but how hard.
+
+None of this replaces evaluating (doc 8) - it just means a broken merge announces itself instead of waiting to surprise you.
+
 ## Where merging fails - the honest part
 
 **Different bases don't merge.** A stratum is tuned to *its* base's specific dials. Add it to a different base and it's nonsense. STRATUM records each stratum's base in `stratum_card.json` and **refuses** to merge mismatched ones. All strata you fuse must share one base.

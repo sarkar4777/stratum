@@ -36,9 +36,10 @@ Recipe shape (see examples/recipe.yaml):
     density: 0.2                       # ties only
     drop: 0.9                          # dare only
     seed: 42                           # dare only
+    normalize: true                    # weights sum to 1 (safe for 3+ strata)
   evals:                               # optional - run after the merge,
     - test: examples/test-extract.jsonl  # making the recipe build AND test
-      scorer: json_field
+      scorer: json_field           # contains / exact / json_field / overlap
       min_score: 0.6                   # the build fails below this
     - test: examples/test-classify.jsonl
       scorer: exact
@@ -55,7 +56,7 @@ STRATUM_KEYS = {"name", "skill", "out", "rank", "epochs", "optimizer", "system",
                 "load_4bit", "lr", "adamw_lr", "batch_size", "grad_accum",
                 "max_len", "seed", "distill"}
 DISTILL_KEYS = {"teacher", "temperature", "alpha", "teacher_4bit", "batch_size"}
-MERGE_KEYS = {"method", "weights", "density", "drop", "seed"}
+MERGE_KEYS = {"method", "weights", "density", "drop", "seed", "normalize"}
 EVAL_KEYS = {"test", "scorer", "min_score", "system"}
 
 

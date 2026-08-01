@@ -95,7 +95,8 @@ def cmd_merge(args):
     try:
         merge_strata(args.strata, args.out, method=args.method,
                      weights=args.weights, density=args.density,
-                     drop=args.drop, seed=args.seed)
+                     drop=args.drop, seed=args.seed,
+                     normalize=args.normalize)
     except (ValueError, FileNotFoundError) as e:
         sys.exit(str(e))
 
@@ -231,6 +232,30 @@ def cmd_plan(args):
         write_remote_bundle(args.emit_remote, args.recipe, recipe)
 
 
+def _stratum_up_to_date(out_dir, skill, base, rank, epochs):
+    """True when a finished stratum already matches this recipe entry.
+
+    The card records what the stratum was trained on - base, rank, the data
+    file's hash, and how many epochs completed. If all of it matches, there
+    is nothing to redo: a failed eval gate or an edited later stratum should
+    not cost retraining the ones that were already right.
+    """
+    import json as json_mod
+
+    card_path = Path(out_dir) / "stratum_card.json"
+    if not card_path.exists():
+        return False
+    try:
+        card = json_mod.loads(card_path.read_text(encoding="utf-8"))
+        from .data import file_sha256
+        return (card.get("base_model") == base
+                and card.get("rank") == rank
+                and card.get("epochs_completed", 0) >= epochs
+                and card.get("skill_sha256") == file_sha256(skill))
+    except Exception:
+        return False
+
+
 def cmd_stack(args):
     """Run a whole build from a YAML recipe: train listed strata, then merge them."""
     from .recipe import load_recipe, stratum_setting
@@ -265,6 +290,12 @@ def cmd_stack(args):
     strata_dirs = []
     for st in recipe["strata"]:
         out = st["out"]
+        if not args.retrain and "distill" not in st and _stratum_up_to_date(
+                out, st["skill"], base, st.get("rank", 16), st.get("epochs", 3)):
+            print(f"\n=== Stratum {st['name']} is already trained on this exact "
+                  f"data and settings - skipping (--retrain to force) ===")
+            strata_dirs.append(out)
+            continue
         common = dict(
             rank=st.get("rank", 16),
             epochs=st.get("epochs", 3),
@@ -307,7 +338,7 @@ def cmd_stack(args):
         merge_strata(strata_dirs, recipe["output_model"],
                      method=m.get("method", "linear"), weights=m.get("weights"),
                      density=m.get("density", 0.2), drop=m.get("drop", 0.9),
-                     seed=m.get("seed", 42))
+                     seed=m.get("seed", 42), normalize=m.get("normalize", False))
     except (ValueError, FileNotFoundError) as e:
         sys.exit(str(e))
 
@@ -365,12 +396,18 @@ def main():
     m.add_argument("--drop", type=float, default=0.9, help="DARE: fraction dropped")
     m.add_argument("--seed", type=int, default=42,
                    help="makes DARE's random dropping reproducible")
+    m.add_argument("--normalize", action="store_true",
+                   help="scale weights to sum to 1 (weighted average instead "
+                        "of weighted sum) - the safe shape for 3+ strata")
     m.set_defaults(func=cmd_merge)
 
     e = sub.add_parser("eval", help="score a model (or a single stratum) on a test set")
     e.add_argument("model")
     e.add_argument("--test", required=True)
-    e.add_argument("--scorer", choices=["contains", "exact", "json_field"], default="contains")
+    e.add_argument("--scorer", default="contains",
+                   choices=["contains", "exact", "json_field", "overlap"],
+                   help="contains/exact for short answers, json_field for "
+                        "extraction, overlap for free text that paraphrases")
     e.add_argument("--system", default=None)
     e.add_argument("--json-out", default=None,
                    help="write the full report as JSON here (for CI)")
@@ -479,6 +516,9 @@ def main():
     s.add_argument("recipe")
     s.add_argument("--force", action="store_true",
                    help="run even when the preflight says it will not fit")
+    s.add_argument("--retrain", action="store_true",
+                   help="retrain strata even when their output already matches "
+                        "the recipe (same data, base, and settings)")
     s.set_defaults(func=cmd_stack)
 
     args = p.parse_args()

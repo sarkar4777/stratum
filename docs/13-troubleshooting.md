@@ -43,6 +43,10 @@ One of your prompts alone is longer than `--max-len`, so the response would be c
 
 It's a thinking model (doc 6). STRATUM disables thinking in every template it renders and strips think blocks from output it scores or displays, so you'd normally never see one. If you're serving the merged model with your own stack (vLLM and the like), render prompts with `enable_thinking=False` there too - the serving stack doesn't know what STRATUM knows.
 
+## The merged model outputs nothing at all
+
+Empty answers on every prompt, while each stratum works fine on its own. The merge summed several full-strength deltas and overshot the base. Check the weight-shift line the merge prints - well above 25% confirms it. Re-merge with `--normalize` (or lower `--weights`), which turns the sum into an average. Doc 5 has the worked example.
+
 ## A skill scores worse after merging than alone
 
 Some merge cost is normal (a couple of points - doc 8 shows a healthy example). A collapse means conflict:

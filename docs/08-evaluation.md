@@ -54,6 +54,9 @@ STRATUM ships three scorers because "correct" means different things per task:
 | `contains` | expected string appears in output | lenient default, quick checks, mixed sets |
 | `exact` | output equals expected (normalized) | classification, where extra words are wrong |
 | `json_field` | parse both as JSON, score field by field | extraction, so `{"total":88,"tax":8}` scores per field |
+| `overlap` | word-overlap F1 against the expected answer | free-text answers that paraphrase - domain Q&A, explanations |
+
+**Free text needs `overlap`.** A model answering "A 100-metre blade made of glass fibre weighs 50 tonnes" against an expected "A 100-metre (330 ft) glass fiber blade weighs 50 tonnes" is right, and `contains` scores it zero - substring tests cannot see a paraphrase. `overlap` measures how much of the expected answer's content the model actually said (F1 over words, filler ignored), so a good paraphrase scores high, an answer padded with filler does not, and a wrong answer still scores zero. Any corpus-built Q&A skill (doc 14) wants this scorer rather than `contains`.
 
 `json_field` compares numbers as numbers: a model answering `"1,499"` against an expected `1499` is right in substance and scores as right. And for thinking models (doc 6), any `<think>` block is stripped before scoring, so you measure the answer, not the reasoning preamble.
 

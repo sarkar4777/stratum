@@ -19,7 +19,7 @@ from pathlib import Path
 
 import torch
 
-from .data import file_sha256, load_jsonl, make_batches
+from .data import check_training_data, file_sha256, load_jsonl, make_batches
 from .muon import Muon, split_params_for_muon
 
 
@@ -138,6 +138,8 @@ def train_tile(
     else:
         raise ValueError(f"Unknown optimizer '{optimizer}'. Use 'muon' or 'adamw'.")
 
+    data_stats = check_training_data(tokenizer, rows, system, max_len)
+
     out_path = Path(out_dir)
     out_path.mkdir(parents=True, exist_ok=True)
 
@@ -165,6 +167,7 @@ def train_tile(
             "skill_file": skill_path,
             "skill_sha256": file_sha256(skill_path),
             "num_pairs": len(rows),
+            "median_response_tokens": data_stats["median_response_tokens"],
             "final_loss": loss_so_far,
             "seed": seed,
             "created_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),

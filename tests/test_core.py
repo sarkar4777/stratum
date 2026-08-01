@@ -197,6 +197,30 @@ def test_make_batches_pads_and_masks():
     assert (input_ids[short][pad_region] == tok.pad_token_id).all()
 
 
+def test_training_data_check_flags_short_responses(capsys):
+    from stratum.data import check_training_data
+    tok = FakeTok()
+    terse = [{"prompt": "What is the share?", "response": "32%"}] * 4
+    stats = check_training_data(tok, terse, None, 128)
+    assert stats["pairs"] == 4
+    warning = capsys.readouterr().out
+    assert "very short" in warning      # the collapse risk
+    assert "below the" in warning       # and the thin-dataset note
+
+
+def test_training_data_check_quiet_on_healthy_data(capsys):
+    from stratum.data import check_training_data
+    tok = FakeTok()
+    rows = [{"prompt": "Explain the process briefly.",
+             "response": "The process works by moving heat from one loop to "
+                         "another through a heat exchanger, which keeps the "
+                         "circuits separate."}] * 60
+    check_training_data(tok, rows, None, 512)
+    out = capsys.readouterr().out
+    assert "WARNING" not in out
+    assert "NOTE" not in out
+
+
 def test_load_jsonl_validates(tmp_path):
     p = tmp_path / "x.jsonl"
     p.write_text('{"prompt": "a", "response": "b"}\n', encoding="utf-8")
@@ -228,6 +252,25 @@ def test_scorers():
     assert score_exact("account_access extra", "account_access") == 0.0
     assert score_json_field('{"total": 44}', {"total": 44}) == 1.0
     assert score_json_field('{"total": 44}', {"total": 44, "tax": 4}) == 0.5
+
+
+def test_overlap_scores_paraphrase():
+    from stratum.evaluate import score_contains, score_overlap
+    expected = "A 100-metre (330 ft) glass fiber blade weighs about 50 tonnes."
+    paraphrase = "A 100-metre blade made of glass fibre weighs about 50 tonnes."
+    # The substring scorer cannot see a correct paraphrase at all.
+    assert score_contains(paraphrase, expected) == 0.0
+    assert score_overlap(paraphrase, expected) > 0.6
+    # An unrelated answer scores zero, and a perfect one scores one.
+    assert score_overlap("The capital of France is Paris.", expected) == 0.0
+    assert score_overlap(expected, expected) == 1.0
+    # Padding with filler cannot inflate the score above a tight answer.
+    padded = expected + " " + "and also many other unrelated details here" * 5
+    assert score_overlap(padded, expected) < score_overlap(expected, expected)
+    # Empty and missing values are handled, not crashed on.
+    assert score_overlap("", expected) == 0.0
+    assert score_overlap(paraphrase, "") == 0.0
+    assert score_overlap("the and of", expected) == 0.0  # stopwords only
 
 
 def test_json_field_matches_number_formats():

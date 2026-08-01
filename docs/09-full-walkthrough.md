@@ -160,6 +160,8 @@ This trains every stratum and fuses them in one command - the reproducible build
 
 Two properties make recipes safe to rely on. Every training setting (`lr`, `batch_size`, `grad_accum`, `max_len`, `seed`, `load_4bit`...) can be set recipe-wide and overridden per stratum, so the recipe expresses everything the CLI can. And the recipe is **validated before anything trains** - a misspelled key like `epoch:` is rejected with the list of valid keys, instead of being silently ignored while your build trains with a default you didn't choose.
 
+Builds are also **incremental**: a stratum whose output already matches its recipe entry - same data (by hash), same base, same settings, all epochs completed - is skipped on re-runs, so a failed eval gate or a new stratum added later never costs retraining the ones that were already right. `--retrain` forces a full rebuild.
+
 A recipe can also end with **eval gates** (`evals:` - see `examples/recipe.yaml`): test sets with minimum scores that run right after the merge. A build that misses a bar fails, which turns the recipe into a self-verifying spec you can run unattended - locally, on a rented GPU box via `stratum plan --emit-remote`, or in CI. Docs 8 and 10 cover both ends of this.
 
 ## The whole thing, condensed

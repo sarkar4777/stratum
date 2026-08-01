@@ -207,13 +207,23 @@ def read_stratum_card(stratum_dir: str) -> dict:
 
 def merge_strata(strata_dirs: list[str], out_dir: str, method: str = "linear",
                  weights: list[float] | None = None, density: float = 0.2,
-                 drop: float = 0.9, seed: int = 42) -> dict:
+                 drop: float = 0.9, seed: int = 42,
+                 normalize: bool = False) -> dict:
     """The full merge pipeline: verify, combine, apply onto a fresh base, save.
 
     Verifies every stratum shares one base model, then materializes and merges
     deltas ONE WEIGHT AT A TIME, so peak memory is the base model plus a single
     layer's deltas - not a full model copy per stratum. Returns a summary dict
     (also written to <out_dir>/stratum_merge.json).
+
+    Two guards protect the result. normalize=True scales the weights to sum to
+    1, turning the weighted SUM into a weighted AVERAGE - the safe default
+    shape when fusing several strata that were each trained to full strength.
+    And every merge measures how far the combined delta moves the base
+    weights, warning loudly when the shift is large enough to damage the
+    model. Both exist because summing three full-strength deltas at weight 1.0
+    each can leave a model that generates nothing at all, with no other
+    symptom until eval.
     """
     from transformers import AutoModelForCausalLM, AutoTokenizer
 
@@ -228,11 +238,27 @@ def merge_strata(strata_dirs: list[str], out_dir: str, method: str = "linear",
         weights = [1.0] * len(strata_dirs)
     if len(weights) != len(strata_dirs):
         raise ValueError("Number of --weights must match number of strata.")
+    if any(w < 0 for w in weights):
+        raise ValueError(f"Negative merge weights are not supported: {weights}")
     if method not in MERGE_METHODS:
         raise ValueError(f"Unknown method '{method}'. Choose from {list(MERGE_METHODS)}.")
 
+    requested = list(weights)
+    total_weight = sum(weights)
+    if normalize:
+        if total_weight <= 0:
+            raise ValueError("Cannot normalize weights that sum to zero.")
+        weights = [w / total_weight for w in weights]
+        print(f"Normalizing weights to sum to 1: {[round(w, 3) for w in weights]}")
+    elif len(strata_dirs) >= 3 and total_weight > 1.5:
+        print(f"Note: {len(strata_dirs)} strata with weights summing to "
+              f"{total_weight:.2f}. Each stratum was trained to full strength "
+              f"on its own, so adding them all at full weight can overshoot "
+              f"the base and break the model. If the merged model degrades, "
+              f"re-run with --normalize (or lower weights).")
+
     print(f"Merging {len(strata_dirs)} strata from {base_model}")
-    print(f" method={method} weights={weights}")
+    print(f" method={method} weights={[round(w, 3) for w in weights]}")
     if any(c.get("load_4bit") for c in cards):
         print(" note: some strata were trained against a 4-bit base (QLoRA) but are\n"
               " merged onto the full-precision base. The small mismatch usually\n"
@@ -249,6 +275,7 @@ def merge_strata(strata_dirs: list[str], out_dir: str, method: str = "linear",
 
     all_keys = sorted(set().union(*[f.keys() for f in factors]))
     applied, missing = 0, 0
+    shift_ratios = []
     for key in all_keys:
         if key not in sd:
             missing += 1
@@ -260,8 +287,28 @@ def merge_strata(strata_dirs: list[str], out_dir: str, method: str = "linear",
                 w.append(wt)
         delta = merge_key(method, tensors, w, density=density, drop=drop,
                           generator=generator)
+        # How far this merge moves the weight, relative to the weight itself.
+        # A healthy skill delta is a nudge (a few percent). A ratio near or
+        # above 1 means the "adjustment" rivals the pretrained weight, which
+        # is how a merged model ends up generating nothing.
+        base_norm = sd[key].float().norm().item()
+        if base_norm > 0:
+            shift_ratios.append(delta.float().norm().item() / base_norm)
         sd[key].add_(delta.to(sd[key].dtype))  # in place on the live weights
         applied += 1
+
+    mean_shift = sum(shift_ratios) / len(shift_ratios) if shift_ratios else 0.0
+    max_shift = max(shift_ratios) if shift_ratios else 0.0
+    print(f" weight shift: {mean_shift:.1%} average, {max_shift:.1%} largest "
+          f"(how far the merge moves the base weights)")
+    if mean_shift > 0.25:
+        print("\n WARNING: this merge moves the base weights a long way.")
+        print(" Models usually break somewhere above a ~25% average shift -")
+        print(" expect degraded or empty output. Fixes, in order:")
+        print("   1. re-run the merge with --normalize (weighted average)")
+        print("   2. lower --weights, or use --method ties")
+        print("   3. train the strata for fewer epochs or a lower rank")
+        print(" Always confirm with `stratum eval` before shipping.\n")
 
     outp = Path(out_dir)
     outp.mkdir(parents=True, exist_ok=True)
@@ -270,9 +317,11 @@ def merge_strata(strata_dirs: list[str], out_dir: str, method: str = "linear",
     from datetime import datetime, timezone
     summary = {
         "base_model": base_model, "method": method, "weights": weights,
+        "requested_weights": requested, "normalized": bool(normalize),
         "strata": [c["stratum_name"] for c in cards],
         "strata_cards": cards,  # the full provenance of every input, in one place
         "deltas_applied": applied, "deltas_unmatched": missing,
+        "mean_weight_shift": mean_shift, "max_weight_shift": max_shift,
         "created_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
     }
     if method == "ties":

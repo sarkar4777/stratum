@@ -98,6 +98,20 @@ If you train with `--system "You are a precise assistant..."`, that instruction 
 | `--seed` | 42 | Same seed = same data order, init, and dropout. GPU math can still differ by a hair between runs and machines - identical *quality*, not always identical bits |
 | 4-bit | on (GPU) | QLoRA, to fit bigger bases, `--no-4bit` to disable |
 
+## The data check that runs first
+
+Before any training, STRATUM measures the response lengths in your data and prints them:
+
+```
+Training data: 39 pairs, response length 2-12 tokens (median 4)
+ WARNING: responses are very short. The end-of-sequence token can dominate
+  the loss and leave a stratum that answers with nothing at all.
+```
+
+That warning describes a real failure this project hit while building its own test model. A skill trained on terse extraction answers ("32%", "75%") learned that answers end almost immediately, and the finished stratum replied to every prompt with an empty string - training loss looked merely mediocre, nothing crashed, and the problem only appeared at eval. If you see it: lower `--lr` (5e-3), cut `--epochs` to 1-2, or write answers as short sentences ("The increase is 32%") rather than bare values. The median response length is recorded in the stratum card either way.
+
+The same check flags datasets under 50 pairs, which are fine for proving a pipeline and thin for a real skill.
+
 ## Checkpoints: a killed run keeps its last epoch
 
 The adapter is saved after every epoch, not just at the end - it's only a few megabytes, and it means a run that dies (power, memory, or you stopping it) leaves the last completed epoch on disk as a usable stratum. The `stratum_card.json` records `epochs_completed` alongside the planned `epochs`, so you can always tell a partial artifact from a finished one.

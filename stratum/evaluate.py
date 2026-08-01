@@ -2,10 +2,11 @@
 Evaluation for STRATUM models.
 
 Reads a test set of {"prompt":..., "expected":...} and scores model outputs.
-Ships three scorers, picked with --scorer:
+Ships four scorers, picked with --scorer:
   contains  : expected string appears in output (lenient default)
   exact     : output equals expected after normalization (strict)
   json_field: parse both as JSON, score field-by-field (for extraction)
+  overlap   : word-overlap F1 (for free-text answers that paraphrase)
 
 A test row may also carry a "skill" key. If any do, the report includes a
 per-skill breakdown so you can see which stratum needs work after a merge.
@@ -81,7 +82,48 @@ def score_json_field(output: str, expected) -> float:
     return correct / len(keys)
 
 
-SCORERS = {"contains": score_contains, "exact": score_exact, "json_field": score_json_field}
+_WORD = re.compile(r"[a-z0-9]+")
+_STOPWORDS = frozenset("""a an and are as at be by for from has have in is it its
+of on or that the this to was were will with""".split())
+
+
+def _content_words(text: str) -> list[str]:
+    return [w for w in _WORD.findall(_norm(text)) if w not in _STOPWORDS]
+
+
+def score_overlap(output: str, expected) -> float:
+    """Word-overlap F1 between the answer and the expected answer.
+
+    The scorer for free-text answers, where `contains` is useless: a model
+    that replies "A 100-metre blade made of glass fibre weighs 50 tonnes"
+    to an expected "A 100-metre (330 ft) glass fiber blade weighs 50 tonnes"
+    is right, and every substring test says zero.
+
+    F1 balances two failure modes a single number has to catch: recall alone
+    would reward an answer that recites the whole document, precision alone
+    would reward a one-word guess. Common filler words are ignored so they
+    cannot inflate the score. This is the standard measure for question
+    answering, and like every automatic scorer it rewards saying the right
+    words - pair it with human review for anything that matters.
+    """
+    pred = _content_words(output)
+    gold = _content_words(str(expected))
+    if not gold:
+        return 0.0
+    if not pred:
+        return 0.0
+    from collections import Counter
+    shared = Counter(pred) & Counter(gold)
+    n_shared = sum(shared.values())
+    if n_shared == 0:
+        return 0.0
+    precision = n_shared / len(pred)
+    recall = n_shared / len(gold)
+    return 2 * precision * recall / (precision + recall)
+
+
+SCORERS = {"contains": score_contains, "exact": score_exact,
+           "json_field": score_json_field, "overlap": score_overlap}
 
 
 def _generate(model, tokenizer, prompt, system, device, max_new_tokens):

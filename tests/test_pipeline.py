@@ -86,6 +86,39 @@ def test_merge_applies_exact_deltas(two_strata, tiny_base, tmp_path):
     assert not torch.equal(merged_sd[key], base_sd[key])
 
 
+def test_merge_normalize_averages_the_weights(two_strata, tmp_path):
+    """Summing several full-strength deltas can overshoot the base and leave a
+    model that generates nothing. --normalize turns the sum into an average."""
+    out = tmp_path / "merged-normalized"
+    summary = merge_strata(two_strata, str(out), weights=[1.0, 1.0],
+                           normalize=True)
+    assert summary["weights"] == [0.5, 0.5]
+    assert summary["requested_weights"] == [1.0, 1.0]
+    assert summary["normalized"] is True
+
+
+def test_merge_reports_weight_shift(two_strata, tmp_path):
+    """Every merge measures how far it moves the base weights, so a merge
+    that would break the model is visible in the record."""
+    out = tmp_path / "merged-shift"
+    summary = merge_strata(two_strata, str(out))
+    assert 0.0 <= summary["mean_weight_shift"] <= summary["max_weight_shift"]
+    assert summary["max_weight_shift"] > 0  # the deltas do move the weights
+
+    # Scaling every weight down must reduce the measured shift.
+    small = merge_strata(two_strata, str(tmp_path / "merged-small"),
+                         weights=[0.1, 0.1])
+    assert small["mean_weight_shift"] < summary["mean_weight_shift"]
+
+
+def test_merge_rejects_impossible_weights(two_strata, tmp_path):
+    with pytest.raises(ValueError, match="Negative"):
+        merge_strata(two_strata, str(tmp_path / "neg"), weights=[-1.0, 1.0])
+    with pytest.raises(ValueError, match="sum to zero"):
+        merge_strata(two_strata, str(tmp_path / "zero"), weights=[0.0, 0.0],
+                     normalize=True)
+
+
 def test_merge_all_methods_produce_models(two_strata, tmp_path):
     for method in ("ties", "dare"):
         out = tmp_path / f"merged-{method}"
@@ -199,6 +232,17 @@ def test_stack_runs_a_whole_recipe(tiny_base, tmp_path, monkeypatch):
     card = read_stratum_card(str(tmp_path / "s1"))
     assert card["max_len"] == 96  # recipe-wide setting reached the training run
     assert card["batch_size"] == 2
+
+    # A second run must skip training entirely - the strata are up to date.
+    import stratum.train as train_mod
+
+    def refuse(*a, **k):
+        raise AssertionError("stack retrained an up-to-date stratum")
+
+    monkeypatch.setattr(train_mod, "train_tile", refuse)
+    monkeypatch.setattr(sys, "argv", ["stratum", "stack", str(rp)])
+    main()
+    monkeypatch.undo()
 
     # A gate the tiny model cannot clear must fail the build.
     recipe["evals"][0]["min_score"] = 1.01
