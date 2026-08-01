@@ -214,7 +214,7 @@ def distill_tile(
 
     # Teacher: frozen, eval mode. Optionally 4-bit - it is only read, so
     # quantizing it is nearly free and roughly quarters its memory.
-    teacher_kwargs = dict(torch_dtype=torch.bfloat16)
+    teacher_kwargs = dict(dtype=torch.bfloat16)
     if teacher_4bit and torch.cuda.is_available():
         try:
             from transformers import BitsAndBytesConfig
@@ -232,7 +232,7 @@ def distill_tile(
         p.requires_grad = False
 
     # Student: LoRA adapter trains.
-    student = AutoModelForCausalLM.from_pretrained(student_model, torch_dtype=torch.bfloat16)
+    student = AutoModelForCausalLM.from_pretrained(student_model, dtype=torch.bfloat16)
     lora_cfg = LoraConfig(r=rank, lora_alpha=rank * 2, lora_dropout=0.05,
                           target_modules="all-linear", task_type="CAUSAL_LM")
     student = get_peft_model(student, lora_cfg)

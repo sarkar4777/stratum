@@ -19,8 +19,11 @@ dependencies = [
     # refuses to use torch at all - every model load dying with a bare
     # "NameError: name 'torch' is not defined". Cap it on that platform only;
     # everywhere else a current torch is available, so stay unpinned.
-    "transformers>=4.51,<5; platform_system == 'Darwin' and platform_machine == 'x86_64'",
-    "transformers>=4.51; platform_system != 'Darwin' or platform_machine != 'x86_64'",
+    # The floor is 4.56, the release that renamed from_pretrained's torch_dtype
+    # argument to dtype. Below that the models load with a deprecation warning
+    # on every run; above it the old name is on borrowed time.
+    "transformers>=4.56,<5; platform_system == 'Darwin' and platform_machine == 'x86_64'",
+    "transformers>=4.56; platform_system != 'Darwin' or platform_machine != 'x86_64'",
     "peft>=0.11",
     "accelerate>=0.30",
     "safetensors>=0.4",

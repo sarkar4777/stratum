@@ -79,7 +79,7 @@ def train_tile(
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
-    model_kwargs = dict(torch_dtype=torch.bfloat16)
+    model_kwargs = dict(dtype=torch.bfloat16)
     if load_4bit and torch.cuda.is_available():
         try:
             from transformers import BitsAndBytesConfig

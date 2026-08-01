@@ -261,11 +261,11 @@ def load_for_inference(model_dir: str):
         print(f"{model_dir} is a single stratum - loading base {base} and attaching it.")
         from peft import PeftModel
         tokenizer = AutoTokenizer.from_pretrained(model_dir)
-        model = AutoModelForCausalLM.from_pretrained(base, torch_dtype=torch.bfloat16)
+        model = AutoModelForCausalLM.from_pretrained(base, dtype=torch.bfloat16)
         model = PeftModel.from_pretrained(model, model_dir)
     else:
         tokenizer = AutoTokenizer.from_pretrained(model_dir)
-        model = AutoModelForCausalLM.from_pretrained(model_dir, torch_dtype=torch.bfloat16)
+        model = AutoModelForCausalLM.from_pretrained(model_dir, dtype=torch.bfloat16)
     return model, tokenizer
 
 

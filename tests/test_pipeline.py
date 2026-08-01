@@ -72,9 +72,9 @@ def test_merge_applies_exact_deltas(two_strata, tiny_base, tmp_path):
     assert (out / "stratum_merge.json").exists()
 
     base_sd = AutoModelForCausalLM.from_pretrained(
-        tiny_base, torch_dtype=torch.bfloat16).state_dict()
+        tiny_base, dtype=torch.bfloat16).state_dict()
     merged_sd = AutoModelForCausalLM.from_pretrained(
-        str(out), torch_dtype=torch.bfloat16).state_dict()
+        str(out), dtype=torch.bfloat16).state_dict()
 
     d0 = extract_deltas(two_strata[0])
     d1 = extract_deltas(two_strata[1])
@@ -182,7 +182,7 @@ def test_dare_same_seed_same_model(two_strata, tmp_path):
         out = tmp_path / f"dare-{run}"
         merge_strata(two_strata, str(out), method="dare", drop=0.5, seed=123)
         sds.append(AutoModelForCausalLM.from_pretrained(
-            str(out), torch_dtype=torch.bfloat16).state_dict())
+            str(out), dtype=torch.bfloat16).state_dict())
     for key in sds[0]:
         assert torch.equal(sds[0][key], sds[1][key])
 

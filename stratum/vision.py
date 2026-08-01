@@ -73,7 +73,7 @@ def _hf_vision_teacher(model_name: str, instruction: str):
     try:
         processor = AutoProcessor.from_pretrained(model_name)
         model = AutoModelForImageTextToText.from_pretrained(
-            model_name, torch_dtype=torch.bfloat16)
+            model_name, dtype=torch.bfloat16)
     except Exception as e:
         raise RuntimeError(
             f"Could not load vision teacher '{model_name}'. Common causes:\n"

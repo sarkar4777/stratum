@@ -270,7 +270,7 @@ def merge_strata(strata_dirs: list[str], out_dir: str, method: str = "linear",
     generator = torch.Generator().manual_seed(seed) if method == "dare" else None
 
     tokenizer = AutoTokenizer.from_pretrained(base_model)
-    model = AutoModelForCausalLM.from_pretrained(base_model, torch_dtype=torch.bfloat16)
+    model = AutoModelForCausalLM.from_pretrained(base_model, dtype=torch.bfloat16)
     sd = model.state_dict()
 
     all_keys = sorted(set().union(*[f.keys() for f in factors]))

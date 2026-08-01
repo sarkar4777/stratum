@@ -127,7 +127,7 @@ def _hf_teacher(model_name: str):
     print("(first run downloads the model - this can take a while)")
     try:
         tokenizer = AutoTokenizer.from_pretrained(model_name)
-        model = AutoModelForCausalLM.from_pretrained(model_name, torch_dtype=torch.bfloat16)
+        model = AutoModelForCausalLM.from_pretrained(model_name, dtype=torch.bfloat16)
     except Exception as e:
         raise RuntimeError(
             f"Could not load teacher '{model_name}'. Common causes:\n"
