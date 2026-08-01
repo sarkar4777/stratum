@@ -1,14 +1,123 @@
 """
 Hugging Face helpers - make model loading dumb-proof.
 
-Enterprise developers new to this hit the same three walls: no internet on a
-locked-down machine, gated models needing a login, and cryptic download errors.
-This module gives one place to check readiness and turn obscure failures into
-plain instructions.
+Enterprise developers new to this hit the same four walls: no internet on a
+locked-down machine, gated models needing a login, cryptic download errors, and
+a PyTorch too old for the transformers that pip installed next to it. This
+module gives one place to check readiness and turn obscure failures into plain
+instructions.
 """
 from __future__ import annotations
 
 import os
+
+
+def check_torch_stack(verbose: bool = False) -> dict:
+    """Check that PyTorch, transformers and peft can work together.
+
+    transformers refuses to use a PyTorch older than its minimum: it quietly
+    disables its own torch half, and the next import that reaches modelling
+    code dies with a bare `NameError: name 'torch' is not defined`. That
+    traceback names no version and no package, so the real cause - two
+    libraries that pip was happy to install side by side but that do not
+    match - is invisible.
+
+    Nothing here compares version numbers by hand: the minimum torch moves
+    with every transformers release, so only the installed transformers knows
+    the answer. We ask it. Returns a status dict; `ok` False means every
+    command that loads a model will fail.
+    """
+    from importlib.metadata import PackageNotFoundError, version
+
+    def installed(pkg: str) -> str | None:
+        try:
+            return version(pkg)
+        except PackageNotFoundError:
+            return None
+
+    status = {p: installed(p) for p in
+              ("torch", "transformers", "peft", "accelerate")}
+    status.update(ok=False, problem=None, fix=[])
+
+    missing = [p for p in ("torch", "transformers", "peft") if not status[p]]
+    if missing:
+        status["problem"] = f"Not installed: {', '.join(missing)}."
+        status["fix"] = ["pip install -e .   (from the STRATUM folder)"]
+    else:
+        # Ask transformers whether it accepted this torch. Its own warning
+        # says the same thing less usefully, so keep it out of the output.
+        import logging
+        logging.disable(logging.WARNING)
+        try:
+            from transformers.utils import is_torch_available
+            status["ok"] = bool(is_torch_available())
+        except Exception as e:
+            status["ok"] = False
+            status["problem"] = f"transformers is installed but unusable: {e}"
+        finally:
+            logging.disable(logging.NOTSET)
+
+        if not status["ok"] and not status["problem"]:
+            status["problem"] = (
+                f"transformers {status['transformers']} will not use PyTorch "
+                f"{status['torch']} - it requires a newer one, so it has "
+                f"disabled PyTorch entirely.")
+            status["fix"] = _torch_stack_fix()
+
+    if verbose:
+        print("Library versions:")
+        for pkg in ("torch", "transformers", "peft", "accelerate"):
+            print(f" {pkg}: {status[pkg] or 'NOT INSTALLED'}")
+        if status["ok"]:
+            print(" these versions work together: yes")
+        else:
+            print(f"\n PROBLEM: {status['problem']}")
+            print(" Every command that loads a model will fail with"
+                  ' "NameError: name \'torch\' is not defined".')
+            print("\n Fix it with:")
+            for line in status["fix"]:
+                print(f"   {line}")
+    return status
+
+
+def _torch_stack_fix() -> list[str]:
+    """The commands that repair a mismatched stack on *this* machine.
+
+    Which advice is right depends on whether a newer PyTorch exists for the
+    platform at all. It does not on Intel Macs - PyTorch stopped publishing
+    macOS x86_64 builds after 2.2.2 - so telling that user to upgrade torch
+    sends them in a circle. There the only way out is down: older libraries.
+    """
+    import platform
+
+    pin = 'pip install "transformers<5"'
+    if platform.system() == "Darwin" and platform.machine() == "x86_64":
+        return [
+            pin,
+            "",
+            "(PyTorch publishes no macOS-Intel build after 2.2.2, so upgrading",
+            " torch is not an option on this machine - pin the libraries",
+            " instead. transformers 4.x supports PyTorch 2.2.)",
+        ]
+    return [
+        "pip install -U torch          # preferred: newer torch, newest libraries",
+        f"{pin}    # or: keep this torch, older libraries",
+    ]
+
+
+def require_torch_stack() -> None:
+    """Stop with a readable message when the installed libraries cannot work.
+
+    Called before any command that loads a model, so a version mismatch costs
+    the user five lines of explanation instead of a 20-frame traceback.
+    """
+    status = check_torch_stack()
+    if status["ok"]:
+        return
+    lines = [status["problem"], ""]
+    lines += ["Fix it with:"] + [f"  {f}" for f in status["fix"]]
+    lines += ["", "Then re-run `stratum doctor` to confirm."]
+    raise SystemExit("\n".join(lines))
 
 
 def check_hf_ready(verbose: bool = True) -> dict:
@@ -55,6 +164,20 @@ def check_hf_ready(verbose: bool = True) -> dict:
         if not status["logged_in"]:
             print("\n For gated models (some Llama/Qwen): run `huggingface-cli login`.")
     return status
+
+
+def encode_for_generation(tokenizer, text: str, device: str):
+    """Tokenize a prompt into exactly what a causal model's generate() accepts.
+
+    Tokenizers may return extras - token_type_ids is the common one - that
+    causal models have no argument for. transformers refuses unknown
+    generate() kwargs ("The following model_kwargs are not used by the
+    model"), so passing the tokenizer's output through wholesale breaks on
+    those tokenizers. Keep the two tensors every causal model wants.
+    """
+    ids = tokenizer(text, return_tensors="pt", add_special_tokens=False)
+    return {k: v.to(device) for k, v in ids.items()
+            if k in ("input_ids", "attention_mask")}
 
 
 def pick_device() -> str:

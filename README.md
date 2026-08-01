@@ -47,15 +47,15 @@ git clone https://github.com/sarkar4777/stratum.git && cd stratum
 pip install -e .
 pip install bitsandbytes # for 4-bit / QLoRA on NVIDIA GPUs
 
+# check your hardware AND that the installed libraries match
+stratum doctor
+
 # understand it first (no GPU, ~20s)
 python scripts/demo_concepts.py
 
 # have a document corpus instead of ready-made training data? doc 14:
 # stratum corpus ingest --in your-docs/ --out corpus/
 # stratum corpus pairs --chunks corpus/chunks.jsonl --instruction "..." --out data/skill.jsonl
-
-# check your hardware
-stratum doctor
 
 # train two skill strata (one at a time, on your laptop)
 stratum train --skill examples/extract.jsonl --out strata/extract --base Qwen/Qwen3-1.7B
@@ -69,6 +69,15 @@ stratum eval models/my-slm --test examples/test-extract.jsonl --scorer json_fiel
 stratum eval models/my-slm --test examples/test-classify.jsonl --scorer exact
 stratum chat models/my-slm
 ```
+
+`stratum doctor` is worth running before anything else: as well as your GPU it
+checks that the installed PyTorch, transformers and peft actually work
+together. They can disagree - transformers 5 needs PyTorch 2.4 or newer, and
+some machines (Intel Macs, older CUDA installs) cannot get one. When that
+happens transformers silently disables PyTorch and the first training run dies
+with `NameError: name 'torch' is not defined`, which points at nothing useful.
+Doctor names the mismatch and prints the fix, usually `pip install
+"transformers<5"`.
 
 Or run the entire build from one recipe - which also carries its own eval gates, so a finished build is a tested build:
 

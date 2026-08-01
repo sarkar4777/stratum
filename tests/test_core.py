@@ -504,3 +504,41 @@ def test_model_hint():
     from stratum.hf_utils import resolve_model_hint
     assert resolve_model_hint("qwen3")  # bad id gives a nonempty hint
     assert not resolve_model_hint("Qwen/Qwen3-1.7B")  # good id gives nothing
+
+
+def test_torch_stack_check_passes_on_a_working_install():
+    """These tests only run at all because the stack works - so it must say so."""
+    from stratum.hf_utils import check_torch_stack
+    status = check_torch_stack()
+    assert status["ok"] and status["problem"] is None
+    assert status["torch"] and status["transformers"] and status["peft"]
+
+
+def test_torch_stack_check_explains_a_version_mismatch(monkeypatch, capsys):
+    """A transformers that has disabled torch must produce an explanation.
+
+    The real failure is a NameError thrown deep inside a library import, so
+    the only thing worth testing is that we catch it first and say something
+    actionable instead.
+    """
+    import transformers.utils
+    from stratum.hf_utils import check_torch_stack
+
+    monkeypatch.setattr(transformers.utils, "is_torch_available", lambda: False)
+    status = check_torch_stack(verbose=True)
+
+    assert not status["ok"]
+    assert "transformers" in status["problem"] and "PyTorch" in status["problem"]
+    assert status["fix"], "a problem with no fix is not worth reporting"
+    out = capsys.readouterr().out
+    assert "PROBLEM" in out and "pip install" in out
+
+
+def test_mismatched_stack_stops_the_command(monkeypatch):
+    """`stratum train` must exit with the message, not a library traceback."""
+    import transformers.utils
+    from stratum.hf_utils import require_torch_stack
+
+    monkeypatch.setattr(transformers.utils, "is_torch_available", lambda: False)
+    with pytest.raises(SystemExit, match="transformers"):
+        require_torch_stack()

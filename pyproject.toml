@@ -14,7 +14,13 @@ classifiers = [
 ]
 dependencies = [
     "torch>=2.1",
-    "transformers>=4.51",
+    # transformers 5 requires torch >= 2.4. PyTorch publishes no macOS-Intel
+    # build after 2.2.2, so there pip would install a transformers that then
+    # refuses to use torch at all - every model load dying with a bare
+    # "NameError: name 'torch' is not defined". Cap it on that platform only;
+    # everywhere else a current torch is available, so stay unpinned.
+    "transformers>=4.51,<5; platform_system == 'Darwin' and platform_machine == 'x86_64'",
+    "transformers>=4.51; platform_system != 'Darwin' or platform_machine != 'x86_64'",
     "peft>=0.11",
     "accelerate>=0.30",
     "safetensors>=0.4",

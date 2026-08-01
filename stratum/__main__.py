@@ -73,8 +73,17 @@ def cmd_doctor(args):
             print("\nRecommended base: Qwen3-0.6B, small datasets, patience.")
 
     print()
-    from .hf_utils import check_hf_ready
+    from .hf_utils import check_hf_ready, check_torch_stack
+    # Versions before Hub access: a stack that cannot load a model at all
+    # makes every other line of this report moot.
+    stack = check_torch_stack(verbose=True)
+
+    print()
     check_hf_ready(verbose=True)
+    if not stack["ok"]:
+        print("\nFix the library versions above before training - nothing "
+              "that loads a model will run until then.")
+        return
     print("\nTo check a specific build against this machine: "
           "`stratum plan recipe.yaml`")
 
@@ -114,9 +123,8 @@ def cmd_eval(args):
 def cmd_chat(args):
     import torch
     from .data import format_messages, strip_think
-    from .hf_utils import load_for_inference
+    from .hf_utils import encode_for_generation, load_for_inference, pick_device
 
-    from .hf_utils import pick_device
     model, tokenizer = load_for_inference(args.model)
     device = pick_device()
     model.to(device).eval()
@@ -135,7 +143,7 @@ def cmd_chat(args):
                 continue
             messages.append({"role": "user", "content": q})
             text = format_messages(tokenizer, messages, add_generation_prompt=True)
-            ids = tokenizer(text, return_tensors="pt", add_special_tokens=False).to(device)
+            ids = encode_for_generation(tokenizer, text, device)
             with torch.no_grad():
                 out = model.generate(**ids, max_new_tokens=400, do_sample=False,
                                      temperature=None, top_p=None,
@@ -522,6 +530,15 @@ def main():
     s.set_defaults(func=cmd_stack)
 
     args = p.parse_args()
+
+    # Every command below loads a model, so a mismatched torch/transformers
+    # pair is fatal for all of them. Check once, here, rather than letting
+    # each one crash inside a library import with an unreadable traceback.
+    if args.cmd in {"train", "merge", "eval", "chat", "distill",
+                    "teacher-gen", "stack"}:
+        from .hf_utils import require_torch_stack
+        require_torch_stack()
+
     args.func(args)
 
 
