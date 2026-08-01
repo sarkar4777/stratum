@@ -129,7 +129,8 @@ SCORERS = {"contains": score_contains, "exact": score_exact,
 def _generate(model, tokenizer, prompt, system, device, max_new_tokens):
     import torch
     text = format_chat(tokenizer, prompt, response=None, system=system)
-    ids = tokenizer(text, return_tensors="pt", add_special_tokens=False).to(device)
+    from .hf_utils import encode_for_generation
+    ids = encode_for_generation(tokenizer, text, device)
     with torch.no_grad():
         out = model.generate(**ids, max_new_tokens=max_new_tokens,
                              do_sample=False, temperature=None, top_p=None,
